@@ -49,16 +49,14 @@
             android:layout_height="0dp"
             android:layout_weight="1" />
 
-        <!-- Bottom Navigation -->
-        <com.google.android.material.bottomnavigation.BottomNavigationView
-            android:id="@+id/bottom_navigation"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@android:color/transparent"
-            app:itemIconTint="@android:color/white"
-            app:itemTextColor="@android:color/white"
-            app:labelVisibilityMode="labeled"
-            app:menu="@menu/bottom_nav_menu" />
-
     </LinearLayout>
+
+    <!-- Custom NavigationBar (positioned at bottom center) -->
+    <xyz.code.navigationbar.NavigationBar
+        android:id="@+id/bottom_navigation"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="16dp" />
+
 </FrameLayout>

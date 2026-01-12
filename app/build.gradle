@@ -72,4 +72,6 @@ dependencies {
     // App depends on bridge module only (not directly on innertube)
     implementation project(':innertube-bridge')
     implementation project(':obscura')
+
+    implementation files('libs/Blur3-release.aar','libs/NavigationBar-release.aar')
 }

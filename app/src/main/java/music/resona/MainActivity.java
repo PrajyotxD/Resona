@@ -1,6 +1,7 @@
 package music.resona;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -8,6 +9,7 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -15,7 +17,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.google.android.material.bottomnavigation.BottomNavigationView;
+import xyz.code.navigationbar.NavigationBar;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,7 +42,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String KEY_CACHED_USERNAME = "cached_username";
     private static final String KEY_CACHED_THUMBNAIL = "cached_thumbnail";
     
-    private BottomNavigationView bottomNavigation;
+    private NavigationBar bottomNavigation;
     private AccountInfoViewModel accountInfoViewModel;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     
@@ -147,51 +149,88 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
             UiUXUtil.TStatusBar(this);
             
-            bottomNavigation = findViewById(R.id.bottom_navigation);
-            bottomNavigation.setPadding(0, 0, 0, systemBars.bottom);
+            // Update bottom margin for NavigationBar to account for system bars
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                bottomNavigation = findViewById(R.id.bottom_navigation);
+                android.widget.FrameLayout.LayoutParams params = 
+                    (android.widget.FrameLayout.LayoutParams) bottomNavigation.getLayoutParams();
+                params.bottomMargin = systemBars.bottom + dpToPx(16);
+                bottomNavigation.setLayoutParams(params);
+            }
             
             return insets;
         });
     }
     
     /**
-     * Configures bottom navigation with item selection handling.
+     * Configures bottom navigation with custom NavigationBar.
      */
+    @RequiresApi(api = Build.VERSION_CODES.S)
     private void setupBottomNavigation() {
         bottomNavigation = findViewById(R.id.bottom_navigation);
-        bottomNavigation.setOnItemSelectedListener(this::handleNavigationItemSelected);
+        
+        // Configure styling to match app theme
+        bottomNavigation.setNavBarBackgroundColor(0x80252525); // Dark semi-transparent
+        bottomNavigation.setActiveBackgroundColor(0xFFFFFFFF); // White indicator
+        bottomNavigation.setInactiveIconColor(0xFFFFFFFF); // White icons
+        bottomNavigation.setActiveIconColor(0xFF000000); // Black active icon
+        bottomNavigation.setCornerRadius(100f); // Pill shape
+        bottomNavigation.setBlurEnabled(true);
+        bottomNavigation.setAnimationCurve(NavigationBar.AnimationCurve.OVERSHOOT);
+        bottomNavigation.setAnimationDuration(400);
+        
+        // Add tabs with custom icons
+        bottomNavigation
+            .addTab(R.drawable.ic_home, "Home")
+            .addTab(R.drawable.ic_search, "Search")
+            .addTab(R.drawable.ic_library, "Library")
+            .addTab(R.drawable.ic_settings, "Settings")
+            .addTab(R.drawable.ic_plugin, "Plugin");
+        
+        // Set selection listener
+        bottomNavigation.setOnTabSelectedListener((position, tab) -> {
+            Fragment fragment = getFragmentForNavPosition(position);
+            if (fragment != null) {
+                loadFragment(fragment);
+            }
+        });
+        
+        // Set initial tab
+        bottomNavigation.setActiveTab(0);
     }
     
     /**
-     * Handles bottom navigation item selection.
+     * Returns the appropriate fragment for the given navigation position.
      * 
-     * @param item the selected menu item
-     * @return true if the item was handled successfully
-     */
-    private boolean handleNavigationItemSelected(@NonNull android.view.MenuItem item) {
-        Fragment fragment = getFragmentForNavItem(item.getItemId());
-        return fragment != null && loadFragment(fragment);
-    }
-    
-    /**
-     * Returns the appropriate fragment for the given navigation item ID.
-     * 
-     * @param itemId the navigation item ID
+     * @param position the navigation tab position
      * @return the corresponding fragment, or null if not found
      */
-    private Fragment getFragmentForNavItem(int itemId) {
-        if (itemId == R.id.nav_home) {
-            return HomeFeed.newInstance();
-        } else if (itemId == R.id.nav_explore) {
-            // TODO: Create ExploreFragment
-            Log.d(TAG, "Explore fragment not yet implemented");
-            return HomeFeed.newInstance();
-        } else if (itemId == R.id.nav_library) {
-            // TODO: Create LibraryFragment
-            Log.d(TAG, "Library fragment not yet implemented");
-            return HomeFeed.newInstance();
+    private Fragment getFragmentForNavPosition(int position) {
+        switch (position) {
+            case 0: // Home
+                return HomeFeed.newInstance();
+            case 1: // Search
+                Log.d(TAG, "Search fragment not yet implemented");
+                return HomeFeed.newInstance();
+            case 2: // Library
+                Log.d(TAG, "Library fragment not yet implemented");
+                return HomeFeed.newInstance();
+            case 3: // Settings
+                Log.d(TAG, "Settings fragment not yet implemented");
+                return HomeFeed.newInstance();
+            case 4: // Plugin
+                Log.d(TAG, "Plugin fragment not yet implemented");
+                return HomeFeed.newInstance();
+            default:
+                return null;
         }
-        return null;
+    }
+    
+    /**
+     * Converts dp to pixels.
+     */
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
     
     /**
