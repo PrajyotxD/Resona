@@ -1,0 +1,180 @@
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+        
+        <!-- Skeleton Shimmer Loader -->
+        <dev.ui.obscura.shimmer.ShimmerLayout
+            android:id="@+id/skeleton_loader"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:visibility="visible"
+            app:obscura_shimmerEnabled="true"
+            app:obscura_shimmerBaseColor="#14141C"
+            app:obscura_shimmerHighlightColor="#252530"
+            app:obscura_shimmerAngle="20"
+            app:obscura_shimmerWidth="0.3"
+            app:obscura_shimmerDuration="1500"
+            app:obscura_shimmerAutoStart="true">
+            
+            <!-- Skeleton placeholder views -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+                
+                <!-- Skeleton item 1 -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="#1A1A24" />
+                
+                <!-- Skeleton item 2 -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:layout_marginBottom="16dp"
+                    android:background="#1A1A24" />
+                    
+                <!-- Skeleton item 3 -->
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="180dp"
+                    android:background="#1A1A24" />
+            </LinearLayout>
+            
+        </dev.ui.obscura.shimmer.ShimmerLayout>
+        
+        <!-- Main Content -->
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/home_scroll_container"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:fillViewport="true"
+            android:overScrollMode="never"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:id="@+id/linear6"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:id="@+id/home_header"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal"
+                    android:paddingStart="12dp"
+                    android:paddingTop="12dp"
+                    android:paddingEnd="12dp"
+                    android:paddingBottom="4dp">
+
+                    <dev.ui.obscura.blur.GlassView
+                        android:id="@+id/home_profile_glass"
+                        android:layout_width="44dp"
+                        android:layout_height="44dp"
+                        android:background="@drawable/bg_glass_halo"
+                        android:elevation="6dp"
+                        android:gravity="center"
+                        android:padding="4dp"
+                        app:obscura_blurRadius="28"
+                        app:obscura_cornerRadius="360dp"
+                        app:obscura_opacity="0.65"
+                        app:obscura_overlayColor="#12FFFFFF">
+
+                        <ImageView
+                            android:id="@+id/home_profile_avatar"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:scaleType="centerCrop"
+                            android:src="@drawable/memefi" />
+                    </dev.ui.obscura.blur.GlassView>
+
+                    <LinearLayout
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:layout_weight="1"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/home_greeting_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Good Morning!"
+                            android:textColor="#A1A1AA"
+                            android:textSize="12sp" />
+
+                        <TextView
+                            android:id="@+id/home_username_text"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Guest"
+                            android:textColor="#FFFFFF"
+                            android:textSize="20sp"
+                            android:textStyle="bold" />
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/textview4"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="8dp"
+                    android:text="Select Categories"
+                    android:textSize="18sp"
+                    android:textColor="#FFFFFF" />
+
+                <HorizontalScrollView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:scrollbars="none"
+                    android:paddingStart="8dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="8dp">
+
+                    <com.google.android.material.chip.ChipGroup
+                        android:id="@+id/chips"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:paddingHorizontal="12dp"
+                        app:singleSelection="false"
+                        app:chipSpacingHorizontal="10dp" />
+
+                </HorizontalScrollView>
+
+                <!-- Quick Picks Grid -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rvQuickPicks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/recyclerview1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:overScrollMode="never"
+                    android:padding="8dp" />
+
+            </LinearLayout>
+        </androidx.core.widget.NestedScrollView>
+    </FrameLayout>
+
+</LinearLayout>
+

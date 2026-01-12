@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    
+    <!-- GlassView - LinearLayout with blur background -->
+    <declare-styleable name="GlassView">
+        <attr name="obscura_blurRadius" format="integer"/>
+        <attr name="obscura_opacity" format="float"/>
+        <attr name="obscura_overlayColor" format="color"/>
+        <attr name="obscura_cornerRadius" format="dimension"/>
+        <attr name="obscura_autoUpdate" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- BlurLayout - LinearLayout with blur effect -->
+    <declare-styleable name="BlurLayout">
+        <attr name="obscura_blurRadius"/>
+        <attr name="obscura_overlayColor"/>
+        <attr name="obscura_cornerRadius"/>
+        <attr name="obscura_blurEnabled" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- BlurImageView - ImageView with blur -->
+    <declare-styleable name="BlurImageView">
+        <attr name="obscura_blurRadius"/>
+        <attr name="obscura_autoBlur" format="boolean"/>
+        <attr name="obscura_blurOnLoad" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- ShimmerLayout - LinearLayout with shimmer effect -->
+    <declare-styleable name="ShimmerLayout">
+        <attr name="obscura_shimmerEnabled" format="boolean"/>
+        <attr name="obscura_shimmerBaseColor" format="color"/>
+        <attr name="obscura_shimmerHighlightColor" format="color"/>
+        <attr name="obscura_shimmerAngle" format="float"/>
+        <attr name="obscura_shimmerWidth" format="float"/>
+        <attr name="obscura_shimmerDuration" format="integer"/>
+        <attr name="obscura_shimmerAutoStart" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- GradientLayout - LinearLayout with gradient background -->
+    <declare-styleable name="GradientLayout">
+        <attr name="obscura_gradientStartColor" format="color"/>
+        <attr name="obscura_gradientCenterColor" format="color"/>
+        <attr name="obscura_gradientEndColor" format="color"/>
+        <attr name="obscura_gradientAngle" format="float"/>
+        <attr name="obscura_gradientRotating" format="boolean"/>
+        <attr name="obscura_gradientDuration" format="integer"/>
+        <attr name="obscura_gradientAutoStart" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- RevealLayout - LinearLayout with reveal/spoiler effect -->
+    <declare-styleable name="RevealLayout">
+        <attr name="obscura_revealOnTouch" format="boolean"/>
+        <attr name="obscura_revealParticleColor" format="color"/>
+        <attr name="obscura_revealBackgroundColor" format="color"/>
+        <attr name="obscura_cornerRadius"/>
+    </declare-styleable>
+    
+    <!-- RevealTextView - TextView with reveal effect -->
+    <declare-styleable name="RevealTextView">
+        <attr name="obscura_revealCoverColor" format="color"/>
+        <attr name="obscura_revealParticleColor"/>
+        <attr name="obscura_revealOnTouch"/>
+    </declare-styleable>
+    
+    <!-- ParallaxLayout - LinearLayout with parallax effect -->
+    <declare-styleable name="ParallaxLayout">
+        <attr name="obscura_parallaxFactor" format="float"/>
+        <attr name="obscura_parallaxMaxOffset" format="dimension"/>
+    </declare-styleable>
+    
+    <!-- WaveLayout - LinearLayout with wave background -->
+    <declare-styleable name="WaveLayout">
+        <attr name="obscura_waveAmplitude" format="dimension"/>
+        <attr name="obscura_waveFrequency" format="float"/>
+        <attr name="obscura_waveSpeed" format="float"/>
+        <attr name="obscura_waveColor" format="color"/>
+        <attr name="obscura_waveStrokeWidth" format="dimension"/>
+        <attr name="obscura_waveAutoStart" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- LoadingView - Circular loading indicator -->
+    <declare-styleable name="LoadingView">
+        <attr name="obscura_loadingColor" format="color"/>
+        <attr name="obscura_loadingStrokeWidth" format="dimension"/>
+        <attr name="obscura_loadingAutoStart" format="boolean"/>
+    </declare-styleable>
+    
+    <!-- RippleLayout - LinearLayout with ripple effect -->
+    <declare-styleable name="RippleLayout">
+        <attr name="obscura_rippleColor" format="color"/>
+        <attr name="obscura_rippleStrokeWidth" format="dimension"/>
+        <attr name="obscura_rippleDuration" format="integer"/>
+    </declare-styleable>
+    
+    <!-- BlurredFrameLayout - FrameLayout with blur -->
+    <declare-styleable name="BlurredFrameLayout">
+        <attr name="obscura_blurRadius"/>
+        <attr name="obscura_overlayColor"/>
+        <attr name="obscura_cornerRadius"/>
+        <attr name="obscura_blurEnabled"/>
+    </declare-styleable>
+    
+    <!-- GradientView - View with gradient (legacy) -->
+    <declare-styleable name="GradientView">
+        <attr name="obscura_gradientStartColor"/>
+        <attr name="obscura_gradientCenterColor"/>
+        <attr name="obscura_gradientEndColor"/>
+        <attr name="obscura_gradientAngle"/>
+        <attr name="obscura_gradientRotating"/>
+        <attr name="obscura_gradientDuration"/>
+        <attr name="obscura_gradientAutoStart"/>
+    </declare-styleable>
+    
+    <!-- WaveView - View with wave (legacy) -->
+    <declare-styleable name="WaveView">
+        <attr name="obscura_waveAmplitude"/>
+        <attr name="obscura_waveFrequency"/>
+        <attr name="obscura_waveSpeed"/>
+        <attr name="obscura_waveColor"/>
+        <attr name="obscura_waveStrokeWidth"/>
+        <attr name="obscura_waveAutoStart"/>
+    </declare-styleable>
+    
+    <!-- RevealFrameLayout - FrameLayout with reveal (legacy) -->
+    <declare-styleable name="RevealFrameLayout">
+        <attr name="obscura_revealOnTouch"/>
+        <attr name="obscura_revealParticleColor"/>
+        <attr name="obscura_revealBackgroundColor"/>
+    </declare-styleable>
+
+</resources>

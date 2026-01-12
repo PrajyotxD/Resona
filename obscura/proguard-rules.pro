@@ -1,0 +1,2 @@
+-keep public class dev.ui.obscura.** { *; }
+-keepclassmembers class dev.ui.obscura.** { *; }
