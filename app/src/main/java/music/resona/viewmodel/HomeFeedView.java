@@ -1,4 +1,4 @@
-package music.resona.fragment;
+package music.resona.viewmodel;
 
 import android.os.Handler;
 import android.os.Looper;

@@ -20,6 +20,8 @@ import com.google.android.material.bottomnavigation.BottomNavigationView;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import music.resona.activity.AuthActivity;
+import music.resona.app.App;
 import music.resona.fragment.HomeFeed;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.models.AccountInfoResult;

@@ -1,6 +1,7 @@
 package music.resona.adapters;
 
 import android.content.Context;
+import android.content.Intent;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -19,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 
 import music.resona.R;
+import music.resona.activity.Vibe;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -205,27 +207,48 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
     private void handleItemClick(@NonNull YTItemResult item) {
         Log.d(TAG, "Clicked: " + item.getTitle() + " (Type: " + item.getType() + ")");
         
-        String message = buildClickMessage(item);
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+        String type = item.getType();
         
-        // TODO: Implement type-specific navigation
-        // - Songs: Start playback
-        // - Albums: Open album page
-        // - Artists: Open artist page
-        // - Playlists: Open playlist page
+        // For albums, playlists, and singles - open Vibe activity
+        if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type) || ITEM_TYPE_SONG.equals(type)) {
+            openVibeActivity(item);
+        } else if (ITEM_TYPE_ARTIST.equals(type)) {
+            // TODO: Open artist page
+            Toast.makeText(context, "Artist page: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        } else {
+            // For songs or other types, show a toast for now
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+            // TODO: Start playback
+        }
     }
     
     /**
-     * Builds the click message for toast display.
+     * Opens the Vibe activity for albums, playlists, and singles.
      * 
-     * @param item the clicked item
-     * @return the formatted message
+     * @param item the item to display
      */
-    @NonNull
-    private String buildClickMessage(@NonNull YTItemResult item) {
-        return item.getTitle() + "\n" + 
-               "Type: " + item.getType() + "\n" +
-               "ID: " + item.getId();
+    private void openVibeActivity(@NonNull YTItemResult item) {
+        Intent intent = new Intent(context, Vibe.class);
+        
+        // Determine browseId - use browseId for albums/artists, playlistId for playlists
+        String browseId = item.getBrowseId();
+        if (browseId == null && item.getPlaylistId() != null) {
+            browseId = item.getPlaylistId();
+        }
+        if (browseId == null) {
+            browseId = item.getId();
+        }
+        
+        // Build subtitle
+        String subtitle = buildSubtitle(item);
+        
+        intent.putExtra("browseId", browseId);
+        intent.putExtra("title", item.getTitle());
+        intent.putExtra("subtitle", subtitle);
+        intent.putExtra("thumbnailUrl", item.getThumbnail());
+        
+        context.startActivity(intent);
+        Log.d(TAG, "Opening Vibe activity for: " + item.getTitle() + " (browseId: " + browseId + ")");
     }
 
     /**

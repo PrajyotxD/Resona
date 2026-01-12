@@ -29,12 +29,13 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import music.resona.App;
+import music.resona.app.App;
 import music.resona.R;
 import music.resona.adapters.HomeSectionAdapter;
 import music.resona.MainActivity;
 import music.resona.online.bridge.models.ChipResult;
 import music.resona.viewmodel.AccountInfoViewModel;
+import music.resona.viewmodel.HomeFeedView;
 
 /**
  * Fragment displaying the YouTube Music home feed.

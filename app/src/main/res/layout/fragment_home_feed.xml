@@ -98,7 +98,7 @@
                             android:layout_width="match_parent"
                             android:layout_height="match_parent"
                             android:scaleType="centerCrop"
-                            android:src="@drawable/memefi" />
+                            android:src="@drawable/customer" />
                     </dev.ui.obscura.blur.GlassView>
 
                     <LinearLayout

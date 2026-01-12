@@ -1,4 +1,4 @@
-package music.resona;
+package music.resona.activity;
 
 import android.app.Activity;
 import android.os.Bundle;
@@ -14,6 +14,8 @@ import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 
+import music.resona.app.App;
+import music.resona.R;
 import music.resona.online.bridge.InnertubeBridge;
 
 /**

@@ -1,4 +1,4 @@
-package music.resona;
+package music.resona.app;
 
 import android.app.Application;
 import android.content.SharedPreferences;
