@@ -14,5 +14,14 @@
 .cxx
 local.properties
 
+# Build outputs
+*/build/
+**/build/
+*.jar
+*.aar
+
+# VS Code
+.vscode/
+
 # Markdown files
 *.md

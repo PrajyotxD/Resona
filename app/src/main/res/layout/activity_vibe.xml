@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.coordinatorlayout.widget.CoordinatorLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/coordinator_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fitsSystemWindows="true"
@@ -16,23 +15,18 @@
         android:layout_width="match_parent"
         android:layout_height="500dp" />
 
-    <!-- AppBar with Collapsing Toolbar -->
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/app_bar"
+    <!-- Main ScrollView -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/scroll_view"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@android:color/transparent"
-        android:fitsSystemWindows="true"
-        android:theme="@style/ThemeOverlay.AppCompat.Dark.ActionBar">
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        android:overScrollMode="never">
 
-        <com.google.android.material.appbar.CollapsingToolbarLayout
-            android:id="@+id/collapsing_toolbar"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:fitsSystemWindows="true"
-            app:contentScrim="@android:color/transparent"
-            app:layout_scrollFlags="scroll|exitUntilCollapsed"
-            app:titleEnabled="false">
+            android:orientation="vertical">
 
             <!-- Header Content -->
             <LinearLayout
@@ -40,11 +34,88 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:fitsSystemWindows="true"
-                android:paddingTop="70dp"
-                android:paddingBottom="20dp"
-                app:layout_collapseMode="parallax"
-                app:layout_collapseParallaxMultiplier="0.5">
+                android:paddingTop="48dp"
+                android:paddingBottom="12dp"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
+
+                <!-- Top Bar with Back and Search -->
+                <RelativeLayout
+                    android:id="@+id/top_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp">
+
+                    <ImageView
+                        android:id="@+id/btn_back"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_alignParentStart="true"
+                        android:padding="10dp"
+                        android:src="@drawable/back"
+                        android:tint="#FFFFFF"
+                        android:background="?attr/selectableItemBackgroundBorderless" />
+
+                    <ImageView
+                        android:id="@+id/btn_search"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_alignParentEnd="true"
+                        android:padding="10dp"
+                        android:src="@android:drawable/ic_menu_search"
+                        android:tint="#FFFFFF"
+                        android:background="?attr/selectableItemBackgroundBorderless" />
+
+                </RelativeLayout>
+
+                <!-- Search Bar -->
+                <RelativeLayout
+                    android:id="@+id/search_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:visibility="gone">
+
+                    <ImageView
+                        android:id="@+id/btn_close_search"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_alignParentStart="true"
+                        android:padding="10dp"
+                        android:src="@drawable/back"
+                        android:tint="#FFFFFF"
+                        android:background="?attr/selectableItemBackgroundBorderless" />
+
+                    <EditText
+                        android:id="@+id/search_input"
+                        android:layout_width="match_parent"
+                        android:layout_height="48dp"
+                        android:layout_toStartOf="@+id/btn_clear_search"
+                        android:layout_toEndOf="@+id/btn_close_search"
+                        android:layout_centerVertical="true"
+                        android:background="@android:color/transparent"
+                        android:hint="Search in playlist"
+                        android:textColor="#FFFFFF"
+                        android:textColorHint="#888888"
+                        android:textSize="16sp"
+                        android:paddingStart="8dp"
+                        android:paddingEnd="8dp"
+                        android:inputType="text"
+                        android:imeOptions="actionSearch"
+                        android:maxLines="1" />
+
+                    <ImageView
+                        android:id="@+id/btn_clear_search"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_alignParentEnd="true"
+                        android:padding="12dp"
+                        android:src="@android:drawable/ic_menu_close_clear_cancel"
+                        android:tint="#FFFFFF"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:visibility="gone" />
+
+                </RelativeLayout>
 
                 <!-- Album Artwork -->
                 <ImageView
@@ -133,7 +204,7 @@
                             android:layout_width="48dp"
                             android:layout_height="48dp"
                             android:padding="12dp"
-                            android:src="@android:drawable/stat_sys_download"
+                            android:src="@drawable/download"
                             android:tint="#FFFFFF"
                             android:background="?attr/selectableItemBackgroundBorderless" />
 
@@ -157,7 +228,7 @@
                             android:layout_width="48dp"
                             android:layout_height="48dp"
                             android:padding="12dp"
-                            android:src="@android:drawable/ic_menu_edit"
+                            android:src="@drawable/edit"
                             android:tint="#FFFFFF"
                             android:background="?attr/selectableItemBackgroundBorderless" />
 
@@ -170,7 +241,7 @@
                         android:layout_height="64dp"
                         android:layout_marginStart="12dp"
                         android:padding="18dp"
-                        android:src="@android:drawable/ic_media_play"
+                        android:src="@drawable/play"
                         android:tint="#000000"
                         android:background="@drawable/circle_green"
                         android:scaleType="fitCenter" />
@@ -193,7 +264,7 @@
                             android:layout_width="48dp"
                             android:layout_height="48dp"
                             android:padding="12dp"
-                            android:src="@android:drawable/ic_menu_share"
+                            android:src="@drawable/share"
                             android:tint="#FFFFFF"
                             android:background="?attr/selectableItemBackgroundBorderless" />
 
@@ -217,7 +288,7 @@
                             android:layout_width="48dp"
                             android:layout_height="48dp"
                             android:padding="12dp"
-                            android:src="@android:drawable/ic_menu_more"
+                            android:src="@drawable/more"
                             android:tint="#FFFFFF"
                             android:background="?attr/selectableItemBackgroundBorderless" />
 
@@ -226,49 +297,6 @@
                 </LinearLayout>
 
             </LinearLayout>
-
-            <!-- Collapsed Toolbar -->
-            <com.google.android.material.appbar.MaterialToolbar
-                android:id="@+id/toolbar"
-                android:layout_width="match_parent"
-                android:layout_height="?attr/actionBarSize"
-                android:background="@android:color/transparent"
-                app:layout_collapseMode="pin"
-                app:navigationIcon="@android:drawable/ic_menu_revert"
-                app:menu="@menu/menu_vibe"
-                app:title=""
-                app:titleTextColor="#FFFFFF">
-
-                <TextView
-                    android:id="@+id/toolbar_title"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:alpha="0"
-                    android:text="song"
-                    android:textColor="#FFFFFF"
-                    android:textSize="18sp"
-                    android:textStyle="bold" />
-
-            </com.google.android.material.appbar.MaterialToolbar>
-
-        </com.google.android.material.appbar.CollapsingToolbarLayout>
-
-    </com.google.android.material.appbar.AppBarLayout>
-
-    <!-- Main Content -->
-    <androidx.core.widget.NestedScrollView
-        android:id="@+id/scroll_view"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:clipToPadding="false"
-        android:fillViewport="true"
-        android:overScrollMode="never"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
 
             <!-- Songs RecyclerView -->
             <androidx.recyclerview.widget.RecyclerView
@@ -287,4 +315,4 @@
 
     </androidx.core.widget.NestedScrollView>
 
-</androidx.coordinatorlayout.widget.CoordinatorLayout>
+</FrameLayout>

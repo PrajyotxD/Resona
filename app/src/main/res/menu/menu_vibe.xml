@@ -4,9 +4,8 @@
     
     <item
         android:id="@+id/action_search"
-        android:icon="@android:drawable/ic_menu_search"
+        android:icon="@drawable/search_48dp"
         android:title="Search"
-        app:showAsAction="always"
-        app:iconTint="#FFFFFF" />
+        app:showAsAction="always" />
         
 </menu>

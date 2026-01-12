@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="1080px"
+    android:layout_height="1080px"
+    android:background="@drawable/share_card_gradient">
+
+    <!-- Inner card with semi-transparent background -->
+    <FrameLayout
+        android:id="@+id/inner_card"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="40px"
+        android:background="@drawable/share_card_inner_bg"
+        android:padding="50px">
+
+        <!-- Main content -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <!-- Album artwork -->
+            <ImageView
+                android:id="@+id/share_album_artwork"
+                android:layout_width="600px"
+                android:layout_height="600px"
+                android:scaleType="centerCrop"
+                android:layout_marginBottom="50px"
+                android:background="@drawable/plugin" />
+
+            <!-- Title -->
+            <TextView
+                android:id="@+id/share_card_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Playlist"
+                android:textColor="#FFFFFF"
+                android:textSize="52sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:paddingStart="30px"
+                android:paddingEnd="30px"
+                android:layout_marginBottom="12px"
+                android:maxLines="2"
+                android:ellipsize="end" />
+
+            <!-- Artist -->
+            <TextView
+                android:id="@+id/share_card_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Artist"
+                android:textColor="#CCCCCC"
+                android:textSize="34sp"
+                android:gravity="center"
+                android:paddingStart="30px"
+                android:paddingEnd="30px"
+                android:layout_marginBottom="8px"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <!-- Metadata -->
+            <TextView
+                android:id="@+id/share_card_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Playlist"
+                android:textColor="#AAAAAA"
+                android:textSize="26sp"
+                android:gravity="center" />
+
+        </LinearLayout>
+
+        <!-- Branding watermark -->
+        <TextView
+            android:id="@+id/share_card_watermark"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|start"
+            android:layout_marginStart="20px"
+            android:layout_marginBottom="20px"
+            android:text="Resona"
+            android:textColor="#FFFFFF"
+            android:textSize="22sp"
+            android:textStyle="bold"
+            android:alpha="0.6" />
+
+    </FrameLayout>
+
+</FrameLayout>

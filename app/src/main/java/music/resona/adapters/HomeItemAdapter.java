@@ -209,16 +209,19 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         
         String type = item.getType();
         
-        // For albums, playlists, and singles - open Vibe activity
-        if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type) || ITEM_TYPE_SONG.equals(type)) {
+        // For albums and playlists - open Vibe activity
+        if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type)) {
             openVibeActivity(item);
+        } else if (ITEM_TYPE_SONG.equals(type)) {
+            // Songs should play, not open Vibe activity
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+            // TODO: Start playback
         } else if (ITEM_TYPE_ARTIST.equals(type)) {
             // TODO: Open artist page
             Toast.makeText(context, "Artist page: " + item.getTitle(), Toast.LENGTH_SHORT).show();
         } else {
-            // For songs or other types, show a toast for now
-            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
-            // TODO: Start playback
+            // For other types, show a toast for now
+            Toast.makeText(context, "Item: " + item.getTitle(), Toast.LENGTH_SHORT).show();
         }
     }
     
