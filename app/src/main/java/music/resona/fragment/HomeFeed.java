@@ -188,7 +188,7 @@ public class HomeFeed extends Fragment {
                         .error(R.drawable.memefi)
                         .into(profileImageView);
             } else {
-                profileImageView.setImageResource(R.drawable.memefi);
+                profileImageView.setImageResource(R.drawable.customer);
             }
         }
     }
