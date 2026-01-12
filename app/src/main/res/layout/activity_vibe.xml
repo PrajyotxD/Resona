@@ -14,7 +14,7 @@
     <View
         android:id="@+id/gradient_background"
         android:layout_width="match_parent"
-        android:layout_height="350dp" />
+        android:layout_height="500dp" />
 
     <!-- AppBar with Collapsing Toolbar -->
     <com.google.android.material.appbar.AppBarLayout
@@ -41,17 +41,18 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:fitsSystemWindows="true"
-                android:paddingTop="80dp"
-                android:paddingBottom="16dp"
+                android:paddingTop="70dp"
+                android:paddingBottom="20dp"
                 app:layout_collapseMode="parallax"
                 app:layout_collapseParallaxMultiplier="0.5">
 
                 <!-- Album Artwork -->
                 <ImageView
                     android:id="@+id/album_artwork"
-                    android:layout_width="200dp"
-                    android:layout_height="200dp"
+                    android:layout_width="240dp"
+                    android:layout_height="240dp"
                     android:layout_gravity="center_horizontal"
+                    android:layout_marginBottom="16dp"
                     android:scaleType="centerCrop"
                     android:src="@drawable/plugin" />
 
@@ -60,132 +61,167 @@
                     android:id="@+id/playlist_title"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="20dp"
-                    android:layout_marginEnd="16dp"
-                    android:ellipsize="end"
-                    android:gravity="start"
-                    android:maxLines="1"
-                    android:text="Playlist Name"
+                    android:layout_marginStart="24dp"
+                    android:layout_marginEnd="24dp"
+                    android:layout_marginBottom="12dp"
+                    android:gravity="center"
+                    android:text="song"
                     android:textColor="#FFFFFF"
-                    android:textSize="14sp" />
+                    android:textSize="24sp"
+                    android:textStyle="normal" />
 
-                <!-- Spotify Brand -->
+                <!-- Creator Info -->
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginEnd="16dp"
+                    android:layout_gravity="center_horizontal"
                     android:orientation="horizontal"
-                    android:gravity="center_vertical">
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="4dp">
 
                     <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
+                        android:id="@+id/creator_avatar"
+                        android:layout_width="28dp"
+                        android:layout_height="28dp"
                         android:src="@drawable/plugin"
-                        android:scaleType="centerInside" />
+                        android:scaleType="centerCrop" />
 
                     <TextView
+                        android:id="@+id/creator_name"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginStart="8dp"
-                        android:text="Spotify"
+                        android:text="Creator"
                         android:textColor="#FFFFFF"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
+                        android:textSize="14sp" />
 
                 </LinearLayout>
 
                 <!-- Metadata -->
                 <TextView
                     android:id="@+id/playlist_metadata"
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="8dp"
-                    android:layout_marginEnd="16dp"
-                    android:text="0 songs"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginBottom="20dp"
+                    android:text="Loading..."
                     android:textColor="#B3B3B3"
                     android:textSize="12sp" />
 
                 <!-- Action Buttons Row -->
                 <LinearLayout
-                    android:layout_width="match_parent"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:layout_marginTop="24dp"
-                    android:layout_marginEnd="16dp"
+                    android:layout_gravity="center_horizontal"
                     android:gravity="center_vertical"
                     android:orientation="horizontal">
 
-                    <!-- Small Thumbnail Preview -->
-                    <ImageView
-                        android:id="@+id/small_thumbnail"
-                        android:layout_width="44dp"
-                        android:layout_height="44dp"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/plugin" />
-
-                    <!-- Add to Library -->
-                    <ImageView
-                        android:id="@+id/btn_add"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:layout_marginStart="20dp"
+                    <!-- Download with GlassView -->
+                    <dev.ui.obscura.blur.GlassView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/bg_glass_halo"
+                        android:elevation="6dp"
                         android:padding="4dp"
-                        android:src="@android:drawable/ic_input_add"
-                        android:tint="#B3B3B3"
-                        android:background="?attr/selectableItemBackgroundBorderless" />
+                        app:obscura_blurRadius="28"
+                        app:obscura_cornerRadius="360dp"
+                        app:obscura_opacity="0.65"
+                        app:obscura_overlayColor="#12FFFFFF">
 
-                    <!-- Download -->
-                    <ImageView
-                        android:id="@+id/btn_download"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:layout_marginStart="20dp"
+                        <ImageView
+                            android:id="@+id/btn_download"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:padding="12dp"
+                            android:src="@android:drawable/stat_sys_download"
+                            android:tint="#FFFFFF"
+                            android:background="?attr/selectableItemBackgroundBorderless" />
+
+                    </dev.ui.obscura.blur.GlassView>
+
+                    <!-- Edit with GlassView -->
+                    <dev.ui.obscura.blur.GlassView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_glass_halo"
+                        android:elevation="6dp"
                         android:padding="4dp"
-                        android:src="@android:drawable/stat_sys_download"
-                        android:tint="#B3B3B3"
-                        android:background="?attr/selectableItemBackgroundBorderless" />
+                        app:obscura_blurRadius="28"
+                        app:obscura_cornerRadius="360dp"
+                        app:obscura_opacity="0.65"
+                        app:obscura_overlayColor="#12FFFFFF">
 
-                    <!-- More Options -->
-                    <ImageView
-                        android:id="@+id/btn_more"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:layout_marginStart="20dp"
-                        android:padding="4dp"
-                        android:src="@android:drawable/ic_menu_more"
-                        android:tint="#B3B3B3"
-                        android:background="?attr/selectableItemBackgroundBorderless" />
+                        <ImageView
+                            android:id="@+id/btn_edit"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:padding="12dp"
+                            android:src="@android:drawable/ic_menu_edit"
+                            android:tint="#FFFFFF"
+                            android:background="?attr/selectableItemBackgroundBorderless" />
 
-                    <Space
-                        android:layout_width="0dp"
-                        android:layout_height="1dp"
-                        android:layout_weight="1" />
+                    </dev.ui.obscura.blur.GlassView>
 
-                    <!-- Shuffle Icon -->
-                    <ImageView
-                        android:id="@+id/btn_shuffle_icon"
-                        android:layout_width="32dp"
-                        android:layout_height="32dp"
-                        android:padding="4dp"
-                        android:src="@android:drawable/ic_menu_sort_by_size"
-                        android:tint="#1DB954"
-                        android:background="?attr/selectableItemBackgroundBorderless" />
-
-                    <!-- Play Button -->
+                    <!-- Play Button (no GlassView) -->
                     <ImageView
                         android:id="@+id/btn_play"
-                        android:layout_width="56dp"
-                        android:layout_height="56dp"
+                        android:layout_width="64dp"
+                        android:layout_height="64dp"
                         android:layout_marginStart="12dp"
-                        android:padding="16dp"
+                        android:padding="18dp"
                         android:src="@android:drawable/ic_media_play"
                         android:tint="#000000"
                         android:background="@drawable/circle_green"
                         android:scaleType="fitCenter" />
+
+                    <!-- Share with GlassView -->
+                    <dev.ui.obscura.blur.GlassView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:background="@drawable/bg_glass_halo"
+                        android:elevation="6dp"
+                        android:padding="4dp"
+                        app:obscura_blurRadius="28"
+                        app:obscura_cornerRadius="360dp"
+                        app:obscura_opacity="0.65"
+                        app:obscura_overlayColor="#12FFFFFF">
+
+                        <ImageView
+                            android:id="@+id/btn_share"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:padding="12dp"
+                            android:src="@android:drawable/ic_menu_share"
+                            android:tint="#FFFFFF"
+                            android:background="?attr/selectableItemBackgroundBorderless" />
+
+                    </dev.ui.obscura.blur.GlassView>
+
+                    <!-- More Options with GlassView -->
+                    <dev.ui.obscura.blur.GlassView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/bg_glass_halo"
+                        android:elevation="6dp"
+                        android:padding="4dp"
+                        app:obscura_blurRadius="28"
+                        app:obscura_cornerRadius="360dp"
+                        app:obscura_opacity="0.65"
+                        app:obscura_overlayColor="#12FFFFFF">
+
+                        <ImageView
+                            android:id="@+id/btn_more"
+                            android:layout_width="48dp"
+                            android:layout_height="48dp"
+                            android:padding="12dp"
+                            android:src="@android:drawable/ic_menu_more"
+                            android:tint="#FFFFFF"
+                            android:background="?attr/selectableItemBackgroundBorderless" />
+
+                    </dev.ui.obscura.blur.GlassView>
 
                 </LinearLayout>
 
@@ -199,6 +235,7 @@
                 android:background="@android:color/transparent"
                 app:layout_collapseMode="pin"
                 app:navigationIcon="@android:drawable/ic_menu_revert"
+                app:menu="@menu/menu_vibe"
                 app:title=""
                 app:titleTextColor="#FFFFFF">
 
@@ -207,9 +244,9 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:alpha="0"
-                    android:text="Playlist Name"
+                    android:text="song"
                     android:textColor="#FFFFFF"
-                    android:textSize="16sp"
+                    android:textSize="18sp"
                     android:textStyle="bold" />
 
             </com.google.android.material.appbar.MaterialToolbar>
@@ -233,67 +270,12 @@
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- Search and Sort Bar -->
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:paddingStart="16dp"
-                android:paddingEnd="16dp"
-                android:paddingTop="12dp"
-                android:paddingBottom="12dp"
-                android:gravity="center_vertical">
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/search_layout"
-                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                    android:layout_width="0dp"
-                    android:layout_height="48dp"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="12dp"
-                    android:hint="Find on this page"
-                    app:startIconDrawable="@android:drawable/ic_menu_search"
-                    app:startIconTint="#B3B3B3"
-                    app:boxStrokeWidth="0dp"
-                    app:boxStrokeWidthFocused="0dp"
-                    app:hintTextColor="#B3B3B3"
-                    app:boxBackgroundColor="#2A2A2A"
-                    app:boxCornerRadiusBottomEnd="4dp"
-                    app:boxCornerRadiusBottomStart="4dp"
-                    app:boxCornerRadiusTopEnd="4dp"
-                    app:boxCornerRadiusTopStart="4dp">
-
-                    <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/search_input"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:textColor="#FFFFFF"
-                        android:textSize="14sp"
-                        android:background="@android:color/transparent" />
-
-                </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btn_sort"
-                    style="@style/Widget.Material3.Button.OutlinedButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="48dp"
-                    android:minWidth="80dp"
-                    android:text="Sort"
-                    android:textColor="#FFFFFF"
-                    android:textSize="14sp"
-                    android:textAllCaps="false"
-                    app:strokeColor="#535353"
-                    app:strokeWidth="1dp"
-                    app:cornerRadius="4dp" />
-
-            </LinearLayout>
-
             <!-- Songs RecyclerView -->
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rv_songs"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:nestedScrollingEnabled="false"
                 android:overScrollMode="never"
                 android:paddingBottom="100dp"

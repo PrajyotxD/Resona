@@ -74,6 +74,10 @@ public class SongsAdapter extends RecyclerView.Adapter<SongsAdapter.SongViewHold
             title.setText(song.getTitle());
             artist.setText(song.getArtist());
 
+            // Apply typefaces
+            music.resona.utils.UiUXUtil.typeface(itemView.getContext(), title, "medium.ttf", android.graphics.Typeface.NORMAL);
+            music.resona.utils.UiUXUtil.typeface(itemView.getContext(), artist, "medium.ttf", android.graphics.Typeface.NORMAL);
+
             // Load thumbnail with Glide
             if (song.getThumbnailUrl() != null && !song.getThumbnailUrl().isEmpty()) {
                 Glide.with(itemView.getContext())

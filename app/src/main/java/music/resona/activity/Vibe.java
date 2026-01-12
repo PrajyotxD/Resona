@@ -61,17 +61,16 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     private TextView playlistTitle;
     private TextView playlistMetadata;
     private TextView toolbarTitle;
+    private TextView creatorName;
+    private ImageView creatorAvatar;
     private View gradientBackground;
     private Toolbar toolbar;
     private RecyclerView recyclerView;
     private SongsAdapter songsAdapter;
-    private TextInputEditText searchInput;
-    private MaterialButton btnSort;
-    private ImageView smallThumbnail;
-    private ImageView btnAdd;
     private ImageView btnDownload;
+    private ImageView btnEdit;
     private ImageView btnMore;
-    private ImageView btnShuffleIcon;
+    private ImageView btnShare;
     private ImageView btnPlay;
     
     private int currentGradientColor = Color.parseColor("#1DB954");
@@ -119,16 +118,15 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         playlistTitle = findViewById(R.id.playlist_title);
         playlistMetadata = findViewById(R.id.playlist_metadata);
         toolbarTitle = findViewById(R.id.toolbar_title);
+        creatorName = findViewById(R.id.creator_name);
+        creatorAvatar = findViewById(R.id.creator_avatar);
         gradientBackground = findViewById(R.id.gradient_background);
         toolbar = findViewById(R.id.toolbar);
         recyclerView = findViewById(R.id.rv_songs);
-        searchInput = findViewById(R.id.search_input);
-        btnSort = findViewById(R.id.btn_sort);
-        smallThumbnail = findViewById(R.id.small_thumbnail);
-        btnAdd = findViewById(R.id.btn_add);
         btnDownload = findViewById(R.id.btn_download);
+        btnEdit = findViewById(R.id.btn_edit);
         btnMore = findViewById(R.id.btn_more);
-        btnShuffleIcon = findViewById(R.id.btn_shuffle_icon);
+        btnShare = findViewById(R.id.btn_share);
         btnPlay = findViewById(R.id.btn_play);
         
         setSupportActionBar(toolbar);
@@ -145,8 +143,15 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
             toolbarTitle.setText(title);
         }
         if (subtitle != null) {
-            playlistMetadata.setText(subtitle);
+            creatorName.setText(subtitle);
+            playlistMetadata.setText("Loading...");
         }
+        
+        // Apply typefaces
+        music.resona.utils.UiUXUtil.typeface(this, playlistTitle, "akatski.ttf", android.graphics.Typeface.NORMAL);
+        music.resona.utils.UiUXUtil.typeface(this, toolbarTitle, "akatski.ttf", android.graphics.Typeface.BOLD);
+        music.resona.utils.UiUXUtil.typeface(this, creatorName, "medium.ttf", android.graphics.Typeface.NORMAL);
+        music.resona.utils.UiUXUtil.typeface(this, playlistMetadata, "copy.ttf", android.graphics.Typeface.NORMAL);
     }
     
     private void setupWindowInsets() {
@@ -158,26 +163,20 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     }
     
     private void setupAlbumArtwork() {
-        // Apply rounded corners to album artwork
-        albumArtwork.setClipToOutline(true);
-        albumArtwork.setOutlineProvider(new ViewOutlineProvider() {
-            @Override
-            public void getOutline(View view, Outline outline) {
-                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(), 16f);
-            }
-        });
+        // Apply corner radius
+        music.resona.utils.UiUXUtil.imageradius(albumArtwork, 16);
+        music.resona.utils.UiUXUtil.imageradius(creatorAvatar, 14);
         
         // Load artwork from URL if available
         if (thumbnailUrl != null && !thumbnailUrl.isEmpty()) {
             Glide.with(this)
                     .asBitmap()
                     .load(thumbnailUrl)
-                    .transform(new RoundedCorners(16))
                     .into(new SimpleTarget<Bitmap>() {
                         @Override
                         public void onResourceReady(Bitmap resource, Transition<? super Bitmap> transition) {
                             albumArtwork.setImageBitmap(resource);
-                            smallThumbnail.setImageBitmap(resource);
+                            creatorAvatar.setImageBitmap(resource);
                             extractAndApplyPaletteColor(resource);
                         }
                     });
@@ -251,9 +250,10 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
             // Fade in toolbar title when collapsed
             toolbarTitle.setAlpha(Math.min(percentage * 2, 1.0f));
             
-            // Fade playlist title
+            // Fade playlist title and metadata
             playlistTitle.setAlpha(1.0f - (percentage * 1.5f));
             playlistMetadata.setAlpha(1.0f - (percentage * 1.5f));
+            creatorName.setAlpha(1.0f - (percentage * 1.5f));
             
             lastOffset = percentage;
         });
@@ -266,35 +266,15 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     }
     
     private void setupSearchAndSort() {
-        // Search functionality
-        searchInput.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                filterSongs(s.toString());
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {}
-        });
-        
-        // Sort button
-        btnSort.setOnClickListener(v -> {
-            // TODO: Show sort options dialog
-            Toast.makeText(this, "Sort options", Toast.LENGTH_SHORT).show();
-        });
-        
         // Action buttons
-        btnAdd.setOnClickListener(v -> {
-            android.util.Log.d("Vibe", "Add to library clicked");
-            Toast.makeText(this, "Added to library", Toast.LENGTH_SHORT).show();
-        });
-        
         btnDownload.setOnClickListener(v -> {
             android.util.Log.d("Vibe", "Download clicked");
             Toast.makeText(this, "Download started", Toast.LENGTH_SHORT).show();
+        });
+        
+        btnEdit.setOnClickListener(v -> {
+            android.util.Log.d("Vibe", "Edit clicked");
+            Toast.makeText(this, "Edit playlist", Toast.LENGTH_SHORT).show();
         });
         
         btnMore.setOnClickListener(v -> {
@@ -302,14 +282,9 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
             Toast.makeText(this, "More options", Toast.LENGTH_SHORT).show();
         });
         
-        btnShuffleIcon.setOnClickListener(v -> {
-            if (!allSongs.isEmpty()) {
-                android.util.Log.d("Vibe", "Shuffle clicked, songs: " + allSongs.size());
-                Toast.makeText(this, "Shuffling playlist", Toast.LENGTH_SHORT).show();
-                // TODO: Start playback with shuffle
-            } else {
-                android.util.Log.w("Vibe", "Shuffle clicked but no songs available");
-            }
+        btnShare.setOnClickListener(v -> {
+            android.util.Log.d("Vibe", "Share clicked");
+            Toast.makeText(this, "Share playlist", Toast.LENGTH_SHORT).show();
         });
         
         btnPlay.setOnClickListener(v -> {
@@ -446,14 +421,10 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         android.util.Log.d("Vibe", "Album: " + album.getAlbum().getTitle() + ", songs: " + album.getSongs().size());
         
         // Update UI with album info
-        playlistTitle.setText(album.getAlbum().getTitle());
-        toolbarTitle.setText(album.getAlbum().getTitle());
-        
-        String metadata = album.getSongs().size() + " songs";
-        if (album.getYear() != null) {
-            metadata += " • " + album.getYear();
-        }
-        playlistMetadata.setText(metadata);
+        runOnUiThread(() -> {
+            playlistTitle.setText(album.getAlbum().getTitle());
+            toolbarTitle.setText(album.getAlbum().getTitle());
+        });
         
         // Parse songs
         for (YTItemResult item : album.getSongs()) {
@@ -478,6 +449,11 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         filteredSongs.clear();
         filteredSongs.addAll(allSongs);
         songsAdapter.setSongs(filteredSongs);
+        
+        // Update metadata with song count
+        runOnUiThread(() -> {
+            playlistMetadata.setText(allSongs.size() + (allSongs.size() == 1 ? " song" : " songs"));
+        });
     }
     
     private void parsePlaylistData(HomePageResult result) {
@@ -518,17 +494,18 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
                     }
                 }
             }
-            
-            // Update metadata
-            if (!allSongs.isEmpty()) {
-                String metadata = allSongs.size() + " songs";
-                playlistMetadata.setText(metadata);
-            }
         }
         
         filteredSongs.clear();
         filteredSongs.addAll(allSongs);
         songsAdapter.setSongs(filteredSongs);
+        
+        // Update metadata with song count
+        runOnUiThread(() -> {
+            if (!allSongs.isEmpty()) {
+                playlistMetadata.setText(allSongs.size() + (allSongs.size() == 1 ? " song" : " songs"));
+            }
+        });
     }
 
     @Override
@@ -536,6 +513,15 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         android.util.Log.d("Vibe", "Song clicked: " + song.getTitle() + " at position " + position);
         Toast.makeText(this, "Playing: " + song.getTitle(), Toast.LENGTH_SHORT).show();
         // TODO: Start playback
+    }
+    
+    @Override
+    public boolean onOptionsItemSelected(android.view.MenuItem item) {
+        if (item.getItemId() == R.id.action_search) {
+            Toast.makeText(this, "Search feature coming soon", Toast.LENGTH_SHORT).show();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
     }
 
     @Override
