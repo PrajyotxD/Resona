@@ -5,7 +5,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.graphics.Bitmap;
 import android.media.AudioAttributes;
 import android.media.MediaPlayer;
 import android.os.Binder;
@@ -14,10 +18,17 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.support.v4.media.session.MediaSessionCompat;
+import android.support.v4.media.session.PlaybackStateCompat;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.media.app.NotificationCompat.MediaStyle;
+
+import com.bumptech.glide.Glide;
+import com.bumptech.glide.request.target.SimpleTarget;
+import com.bumptech.glide.request.transition.Transition;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -40,8 +51,16 @@ public class MusicService extends Service {
     private static final int NOTIFICATION_ID = 1001;
     private static final int PROGRESS_UPDATE_INTERVAL_MS = 500;
     
+    // Notification actions
+    public static final String ACTION_PLAY = "music.resona.PLAY";
+    public static final String ACTION_PAUSE = "music.resona.PAUSE";
+    public static final String ACTION_NEXT = "music.resona.NEXT";
+    public static final String ACTION_PREVIOUS = "music.resona.PREVIOUS";
+    
     // Playback state
     private MediaPlayer mediaPlayer;
+    private MediaSessionCompat mediaSession;
+    private Bitmap currentAlbumArt;
     private final List<Song> queue = new ArrayList<>();
     private final List<Song> shuffledQueue = new ArrayList<>();
     private int currentIndex = -1;
@@ -79,6 +98,30 @@ public class MusicService extends Service {
     // Binder
     private final IBinder binder = new MusicBinder();
     
+    // Broadcast receiver for notification actions
+    private final BroadcastReceiver notificationReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (action == null) return;
+            
+            switch (action) {
+                case ACTION_PLAY:
+                    resume();
+                    break;
+                case ACTION_PAUSE:
+                    pause();
+                    break;
+                case ACTION_NEXT:
+                    playNext();
+                    break;
+                case ACTION_PREVIOUS:
+                    playPrevious();
+                    break;
+            }
+        }
+    };
+    
     public enum RepeatMode {
         OFF, ALL, ONE
     }
@@ -104,8 +147,17 @@ public class MusicService extends Service {
         super.onCreate();
         createNotificationChannel();
         initMediaPlayer();
+        initMediaSession();
         personalizedHomeFeed = new PersonalizedHomeFeed(this);
         progressHandler.post(progressRunnable);
+        
+        // Register broadcast receiver for notification actions
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(ACTION_PLAY);
+        filter.addAction(ACTION_PAUSE);
+        filter.addAction(ACTION_NEXT);
+        filter.addAction(ACTION_PREVIOUS);
+        registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
     }
     
     @Nullable
@@ -124,6 +176,15 @@ public class MusicService extends Service {
     public void onDestroy() {
         progressHandler.removeCallbacks(progressRunnable);
         releaseMediaPlayer();
+        if (mediaSession != null) {
+            mediaSession.release();
+            mediaSession = null;
+        }
+        try {
+            unregisterReceiver(notificationReceiver);
+        } catch (Exception e) {
+            Log.e(TAG, "Error unregistering receiver", e);
+        }
         super.onDestroy();
     }
     
@@ -142,6 +203,13 @@ public class MusicService extends Service {
         }
     }
     
+    private void initMediaSession() {
+        mediaSession = new MediaSessionCompat(this, "ResonaMusicService");
+        mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
+                             MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        mediaSession.setActive(true);
+    }
+    
     private Notification createNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
         PendingIntent pendingIntent = PendingIntent.getActivity(
@@ -153,20 +221,91 @@ public class MusicService extends Service {
         String title = currentSong != null ? currentSong.getTitle() : "Resona";
         String artist = currentSong != null ? currentSong.getArtist() : "Music Player";
         
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+        // Create action intents
+        PendingIntent playPauseIntent = PendingIntent.getBroadcast(
+            this, 0,
+            new Intent(isPlaying ? ACTION_PAUSE : ACTION_PLAY),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        PendingIntent previousIntent = PendingIntent.getBroadcast(
+            this, 1,
+            new Intent(ACTION_PREVIOUS),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        PendingIntent nextIntent = PendingIntent.getBroadcast(
+            this, 2,
+            new Intent(ACTION_NEXT),
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        
+        // Update media session playback state
+        if (mediaSession != null) {
+            PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
+                .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE |
+                           PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
+                           PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                .setState(isPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
+                         mediaPlayer != null && !isPreparing ? mediaPlayer.getCurrentPosition() : 0,
+                         1.0f);
+            mediaSession.setPlaybackState(stateBuilder.build());
+        }
+        
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(artist)
             .setSmallIcon(R.drawable.play)
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build();
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+            // Media controls using android system icons
+            .addAction(android.R.drawable.ic_media_previous, "Previous", previousIntent)
+            .addAction(isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
+                      isPlaying ? "Pause" : "Play", playPauseIntent)
+            .addAction(android.R.drawable.ic_media_next, "Next", nextIntent)
+            // MediaStyle
+            .setStyle(new MediaStyle()
+                .setMediaSession(mediaSession.getSessionToken())
+                .setShowActionsInCompactView(0, 1, 2));
+        
+        // Add album art if available
+        if (currentAlbumArt != null) {
+            builder.setLargeIcon(currentAlbumArt);
+        }
+        
+        return builder.build();
     }
     
     private void updateNotification() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) {
             manager.notify(NOTIFICATION_ID, createNotification());
+        }
+    }
+    
+    private void loadAlbumArt(String thumbnailUrl) {
+        if (thumbnailUrl == null || thumbnailUrl.isEmpty()) {
+            currentAlbumArt = null;
+            updateNotification();
+            return;
+        }
+        
+        try {
+            Glide.with(this)
+                .asBitmap()
+                .load(thumbnailUrl)
+                .into(new SimpleTarget<Bitmap>() {
+                    @Override
+                    public void onResourceReady(Bitmap resource, Transition<? super Bitmap> transition) {
+                        currentAlbumArt = resource;
+                        updateNotification();
+                    }
+                });
+        } catch (Exception e) {
+            Log.e(TAG, "Error loading album art", e);
+            currentAlbumArt = null;
         }
     }
     
@@ -265,6 +404,8 @@ public class MusicService extends Service {
         Song song = getCurrentSong();
         if (song != null) {
             notifySongChanged(song);
+            // Load album art for notification
+            loadAlbumArt(song.getThumbnailUrl());
             // Stream URL will be fetched by MusicPlaybackManager
         }
     }
@@ -295,6 +436,18 @@ public class MusicService extends Service {
         } else {
             play();
         }
+    }
+    
+    public void resume() {
+        play();
+    }
+    
+    public void playNext() {
+        next();
+    }
+    
+    public void playPrevious() {
+        previous();
     }
     
     public void next() {
