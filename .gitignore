@@ -24,6 +24,7 @@ build/
 
 # VS Code
 .vscode/
-
+innertube-bridge/build
+obscura/build
 # Markdown files
 *.md

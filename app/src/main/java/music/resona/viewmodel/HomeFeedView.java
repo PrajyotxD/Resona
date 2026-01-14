@@ -1,5 +1,6 @@
 package music.resona.viewmodel;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -40,6 +41,7 @@ public class HomeFeedView extends ViewModel {
     private static final int AUTO_LOAD_DELAY_MS = 300;
     
     private final MutableLiveData<List<HomeSectionResult>> homeSections;
+    private final MutableLiveData<List<HomeSectionResult>> personalizedSections;
     private final MutableLiveData<List<ChipResult>> chips;
     private final MutableLiveData<List<YTItemResult>> quickPicks;
     private final MutableLiveData<Boolean> isLoading;
@@ -50,9 +52,11 @@ public class HomeFeedView extends ViewModel {
     @Nullable
     private String continuationToken;
     private volatile boolean isLoadingMore;
+    private PersonalizedHomeFeed personalizedHomeFeed;
     
     public HomeFeedView() {
         this.homeSections = new MutableLiveData<>(new ArrayList<>());
+        this.personalizedSections = new MutableLiveData<>(new ArrayList<>());
         this.chips = new MutableLiveData<>(new ArrayList<>());
         this.quickPicks = new MutableLiveData<>(new ArrayList<>());
         this.isLoading = new MutableLiveData<>(false);
@@ -63,6 +67,16 @@ public class HomeFeedView extends ViewModel {
     }
     
     /**
+     * Initialize with Context for PersonalizedHomeFeed.
+     * Call this before using the ViewModel.
+     */
+    public void initialize(Context context) {
+        if (personalizedHomeFeed == null) {
+            personalizedHomeFeed = new PersonalizedHomeFeed(context);
+        }
+    }
+    
+    /**
      * Returns observable LiveData containing the list of home feed sections.
      * 
      * @return LiveData containing immutable list of HomeSectionResult
@@ -70,6 +84,16 @@ public class HomeFeedView extends ViewModel {
     @NonNull
     public LiveData<List<HomeSectionResult>> getHomeSections() {
         return homeSections;
+    }
+    
+    /**
+     * Returns observable LiveData containing personalized recommendation sections.
+     * 
+     * @return LiveData containing list of personalized HomeSectionResult
+     */
+    @NonNull
+    public LiveData<List<HomeSectionResult>> getPersonalizedSections() {
+        return personalizedSections;
     }
     
     /**
@@ -437,6 +461,42 @@ public class HomeFeedView extends ViewModel {
                 });
             }
         });
+    }
+    
+    /**
+     * Loads personalized recommendation sections based on user's listening history.
+     * These sections include "Similar to" artist recommendations, forgotten favorites, etc.
+     */
+    public void loadPersonalizedSections() {
+        if (personalizedHomeFeed == null) {
+            Log.w(TAG, "PersonalizedHomeFeed not initialized, call initialize() first");
+            return;
+        }
+        
+        Log.d(TAG, "Loading personalized recommendation sections...");
+        
+        executorService.execute(() -> {
+            try {
+                personalizedHomeFeed.generatePersonalizedFeed();
+                // Sections are set via LiveData callback
+                mainHandler.post(() -> {
+                    Log.d(TAG, "Started generating personalized feed");
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading personalized sections", e);
+                mainHandler.post(() -> {
+                    personalizedSections.setValue(new ArrayList<>());
+                });
+            }
+        });
+    }
+    
+    /**
+     * Refreshes both home feed and personalized sections.
+     */
+    public void refreshAll() {
+        loadHomeData();
+        loadPersonalizedSections();
     }
     
     @Override

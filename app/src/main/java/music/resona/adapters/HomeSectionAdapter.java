@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import java.util.List;
 
 import music.resona.R;
+import music.resona.cache.SongPrefetchHelper;
 import music.resona.online.bridge.models.HomeSectionResult;
 
 /**
@@ -109,6 +110,11 @@ public class HomeSectionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
      * @param section the section data
      */
     private void bindItems(@NonNull ItemsViewHolder holder, @NonNull HomeSectionResult section) {
+        // Prefetch stream URLs for first 3 songs in each section for instant playback
+        if (section.getItems() != null && !section.getItems().isEmpty()) {
+            SongPrefetchHelper.getInstance().prefetchFromHomeFeed(section.getItems(), 3);
+        }
+        
         HomeItemAdapter itemAdapter = new HomeItemAdapter(context, section.getItems());
         holder.rvHorizontal.setLayoutManager(
             new LinearLayoutManager(context, LinearLayoutManager.HORIZONTAL, false)

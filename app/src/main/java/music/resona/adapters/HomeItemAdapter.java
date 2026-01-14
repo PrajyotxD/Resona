@@ -19,8 +19,10 @@ import com.bumptech.glide.Glide;
 import java.util.List;
 import java.util.Locale;
 
+import music.resona.MainActivity;
 import music.resona.R;
 import music.resona.activity.Vibe;
+import music.resona.models.Song;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -213,15 +215,46 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type)) {
             openVibeActivity(item);
         } else if (ITEM_TYPE_SONG.equals(type)) {
-            // Songs should play, not open Vibe activity
-            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
-            // TODO: Start playback
+            // Play the song directly
+            playSong(item);
         } else if (ITEM_TYPE_ARTIST.equals(type)) {
             // TODO: Open artist page
             Toast.makeText(context, "Artist page: " + item.getTitle(), Toast.LENGTH_SHORT).show();
         } else {
             // For other types, show a toast for now
             Toast.makeText(context, "Item: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    /**
+     * Plays a song item by converting it to Song model and calling MainActivity.
+     * 
+     * @param item the song item to play
+     */
+    private void playSong(@NonNull YTItemResult item) {
+        String videoId = item.getId();
+        if (videoId == null || videoId.isEmpty()) {
+            Toast.makeText(context, "Cannot play: No video ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String artistName = getFirstArtistName(item);
+        Integer duration = item.getDuration();
+        
+        Song song = new Song(
+            videoId,
+            item.getTitle(),
+            artistName,
+            null, // album
+            item.getThumbnail(),
+            duration != null ? duration : 0
+        );
+        
+        // Play through MainActivity
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).playSong(song);
+        } else {
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
         }
     }
     

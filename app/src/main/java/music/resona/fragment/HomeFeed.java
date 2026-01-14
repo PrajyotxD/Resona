@@ -30,6 +30,7 @@ import java.util.Calendar;
 import java.util.List;
 
 import music.resona.app.App;
+import music.resona.cache.SongPrefetchHelper;
 import music.resona.R;
 import music.resona.adapters.HomeSectionAdapter;
 import music.resona.MainActivity;
@@ -348,6 +349,9 @@ public class HomeFeed extends Fragment {
         
         Log.d(TAG, "Showing quick picks with " + picks.size() + " items");
         quickPicksRecyclerView.setVisibility(View.VISIBLE);
+        
+        // Prefetch stream URLs for quick picks to enable instant playback
+        SongPrefetchHelper.getInstance().prefetchFromHomeFeed(picks, 5);
         
         music.resona.adapters.QuickPicksAdapter quickPicksAdapter = 
             new music.resona.adapters.QuickPicksAdapter(requireContext(), picks);

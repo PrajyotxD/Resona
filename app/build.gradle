@@ -27,6 +27,10 @@ android {
         targetCompatibility JavaVersion.VERSION_21
     }
 
+    buildFeatures {
+        viewBinding true
+    }
+
     java {
         toolchain {
             languageVersion = JavaLanguageVersion.of(21)

@@ -1,3 +1,36 @@
 <resources>
     <string name="app_name">Resona</string>
+    
+    <!-- Artist Page -->
+    <string name="back">Back</string>
+    <string name="more_options">More options</string>
+    <string name="shuffle">Shuffle</string>
+    <string name="radio">Radio</string>
+    <string name="loading">Loading…</string>
+    <string name="error_loading">Failed to load content</string>
+    <string name="retry">Retry</string>
+    <string name="popular_songs">Popular Songs</string>
+    <string name="albums">Albums</string>
+    <string name="singles">Singles</string>
+    <string name="videos">Videos</string>
+    
+    <!-- Search -->
+    <string name="search">Search</string>
+    <string name="search_songs_artists_albums">Search songs, artists, albums</string>
+    <string name="search_for_songs_artists_albums">Search for songs, artists, albums, and more</string>
+    <string name="clear">Clear</string>
+    <string name="songs">Songs</string>
+    <string name="artists">Artists</string>
+    <string name="playlists">Playlists</string>
+    <string name="start_searching">Start searching</string>
+    <string name="searching">Searching…</string>
+    <string name="error">Error</string>
+    <string name="something_went_wrong">Something went wrong</string>
+    <string name="album_art">Album art</string>
+    
+    <!-- Share Card -->
+    <string name="playlist">Playlist</string>
+    <string name="various_artists">Various Artists</string>
+    <string name="watermark">Resona Music</string>
+    
 </resources>
