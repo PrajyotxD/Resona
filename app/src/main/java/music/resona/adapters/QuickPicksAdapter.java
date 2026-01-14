@@ -17,7 +17,9 @@ import com.bumptech.glide.Glide;
 
 import java.util.List;
 
+import music.resona.MainActivity;
 import music.resona.R;
+import music.resona.models.Song;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -89,8 +91,31 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
 
     private void handleItemClick(YTItemResult item) {
         Log.d(TAG, "Quick pick clicked: " + item.getTitle());
-        Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
-        // TODO: Implement playback
+        
+        String videoId = item.getId();
+        if (videoId == null || videoId.isEmpty()) {
+            Toast.makeText(context, "Cannot play: No video ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String artistName = getArtistName(item);
+        Integer duration = item.getDuration();
+        
+        Song song = new Song(
+            videoId,
+            item.getTitle(),
+            artistName,
+            null, // album
+            item.getThumbnail(),
+            duration != null ? duration : 0
+        );
+        
+        // Play through MainActivity
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).playSong(song);
+        } else {
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     static class QuickPickViewHolder extends RecyclerView.ViewHolder {
