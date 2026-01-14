@@ -15,10 +15,12 @@
 local.properties
 
 # Build outputs
+build/
 */build/
 **/build/
 *.jar
 *.aar
+*.class
 
 # VS Code
 .vscode/
