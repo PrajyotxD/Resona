@@ -23,6 +23,7 @@ import music.resona.activity.Vibe;
 import music.resona.adapters.ArtistContentAdapter;
 import music.resona.databinding.FragmentArtistBinding;
 import music.resona.online.bridge.models.YTItemResult;
+import music.resona.utils.UiUXUtil;
 import music.resona.viewmodel.ArtistViewModel;
 
 import java.util.List;
@@ -109,6 +110,13 @@ public class ArtistFragment extends Fragment {
         if (artistName != null) {
             binding.artistName.setText(artistName);
         }
+        
+        // Apply custom fonts using UiUXUtil
+        // Header/Title uses akatski.ttf
+        UiUXUtil.typeface(requireContext(), binding.artistName, "akatski.ttf", android.graphics.Typeface.NORMAL);
+        
+        // Other info uses medium.ttf
+        UiUXUtil.typeface(requireContext(), binding.descriptionText, "medium.ttf", android.graphics.Typeface.NORMAL);
         
         // Back button
         binding.backButton.setOnClickListener(v -> {
@@ -232,6 +240,7 @@ public class ArtistFragment extends Fragment {
     private void setupObservers() {
         // Observe loading state
         viewModel.getIsLoading().observe(getViewLifecycleOwner(), isLoading -> {
+            Log.d(TAG, "Loading state changed: " + isLoading);
             binding.loadingLayout.setVisibility(isLoading ? View.VISIBLE : View.GONE);
             binding.contentLayout.setVisibility(isLoading ? View.GONE : View.VISIBLE);
             binding.errorLayout.setVisibility(View.GONE);
@@ -247,47 +256,83 @@ public class ArtistFragment extends Fragment {
         // Observe artist data
         viewModel.getArtist().observe(getViewLifecycleOwner(), artist -> {
             if (artist != null) {
+                Log.d(TAG, "Artist data received: " + artist.getTitle());
                 binding.artistName.setText(artist.getTitle());
+            } else {
+                Log.d(TAG, "Artist data is null");
             }
         });
         
         // Observe thumbnails
         viewModel.getThumbnails().observe(getViewLifecycleOwner(), thumbnails -> {
             if (thumbnails != null && !thumbnails.isEmpty()) {
+                Log.d(TAG, "Thumbnails received: " + thumbnails.size());
                 String thumbnailUrl = thumbnails.get(0);
                 Glide.with(this)
                     .load(thumbnailUrl)
                     .into(binding.artistImage);
+            } else {
+                Log.d(TAG, "No thumbnails available");
             }
         });
         
         // Observe description
         viewModel.getDescription().observe(getViewLifecycleOwner(), description -> {
             if (description != null && !description.isEmpty()) {
-                binding.descriptionText.setText(description);
+                // Check if description is long (more than 5-10 lines worth of text)
+                int maxChars = 300; // Approximately 5-10 lines
+                
+                if (description.length() > maxChars) {
+                    // Show truncated version with "Read More"
+                    String truncated = description.substring(0, maxChars) + "...";
+                    binding.descriptionText.setText(truncated);
+                    binding.descriptionText.setMaxLines(10);
+                    
+                    // Add click listener to show full description
+                    binding.descriptionText.setOnClickListener(v -> {
+                        if (binding.descriptionText.getMaxLines() == 10) {
+                            // Expand
+                            binding.descriptionText.setText(description);
+                            binding.descriptionText.setMaxLines(Integer.MAX_VALUE);
+                        } else {
+                            // Collapse
+                            binding.descriptionText.setText(truncated);
+                            binding.descriptionText.setMaxLines(10);
+                        }
+                    });
+                } else {
+                    // Show full description
+                    binding.descriptionText.setText(description);
+                    binding.descriptionText.setMaxLines(Integer.MAX_VALUE);
+                }
                 binding.descriptionText.setVisibility(View.VISIBLE);
             } else {
+                Log.d(TAG, "No description available");
                 binding.descriptionText.setVisibility(View.GONE);
             }
         });
         
         // Observe songs
         viewModel.getSongs().observe(getViewLifecycleOwner(), songs -> {
+            Log.d(TAG, "Songs received: " + (songs != null ? songs.size() : "null"));
             updateSection(binding.songsSection, songs, songsAdapter);
         });
         
         // Observe albums
         viewModel.getAlbums().observe(getViewLifecycleOwner(), albums -> {
+            Log.d(TAG, "Albums received: " + (albums != null ? albums.size() : "null"));
             updateSection(binding.albumsSection, albums, albumsAdapter);
         });
         
         // Observe singles
         viewModel.getSingles().observe(getViewLifecycleOwner(), singles -> {
+            Log.d(TAG, "Singles received: " + (singles != null ? singles.size() : "null"));
             updateSection(binding.singlesSection, singles, singlesAdapter);
         });
         
         // Observe videos
         viewModel.getVideos().observe(getViewLifecycleOwner(), videos -> {
+            Log.d(TAG, "Videos received: " + (videos != null ? videos.size() : "null"));
             updateSection(binding.videosSection, videos, videosAdapter);
         });
     }
@@ -295,9 +340,11 @@ public class ArtistFragment extends Fragment {
     private void updateSection(@NonNull View sectionLayout, @Nullable List<YTItemResult> items,
                                @NonNull ArtistContentAdapter adapter) {
         if (items != null && !items.isEmpty()) {
+            Log.d(TAG, "Showing section with " + items.size() + " items");
             sectionLayout.setVisibility(View.VISIBLE);
             adapter.submitList(items);
         } else {
+            Log.d(TAG, "Hiding section - items: " + (items == null ? "null" : "empty"));
             sectionLayout.setVisibility(View.GONE);
         }
     }

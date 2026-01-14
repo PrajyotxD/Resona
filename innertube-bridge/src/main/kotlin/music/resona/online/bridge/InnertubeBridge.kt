@@ -594,9 +594,7 @@ object InnertubeBridge {
         return ExceptionConverter.convertExceptions {
             runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
                 val result = YouTube.artist(browseId).getOrThrow()
-                // Extract songs from the first section that contains songs
-                val songs = result.sections.flatMap { it.items }.filterIsInstance<com.metrolist.innertube.models.SongItem>()
-                ModelConverter.convertArtistBasic(result.artist, songs)
+                ModelConverter.convertArtistBasic(result.artist, result.sections, result.description)
             }
         }
     }
@@ -1815,8 +1813,7 @@ object InnertubeBridge {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val result = YouTube.artist(browseId).getOrThrow()
-                val songs = result.sections.flatMap { it.items }.filterIsInstance<com.metrolist.innertube.models.SongItem>()
-                val bridgeResult = ModelConverter.convertArtistBasic(result.artist, songs)
+                val bridgeResult = ModelConverter.convertArtistBasic(result.artist, result.sections, result.description)
                 
                 CoroutineScope(Dispatchers.Main).launch {
                     callback.onSuccess(bridgeResult)

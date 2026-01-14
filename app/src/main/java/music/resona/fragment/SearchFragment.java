@@ -267,11 +267,12 @@ public class SearchFragment extends Fragment implements SearchResultsAdapter.OnI
                 openVibeActivity(browseId, item.getTitle(), item.getThumbnail());
             }
         } else if ("artist".equals(type)) {
-            // Open artist page
-            if (item.getBrowseId() != null) {
-                openArtistPage(item.getBrowseId(), item.getTitle());
+            // Open artist page - use browseId if available, otherwise fall back to id
+            String artistId = item.getBrowseId() != null ? item.getBrowseId() : item.getId();
+            if (artistId != null && !artistId.isEmpty()) {
+                openArtistPage(artistId, item.getTitle());
             } else {
-                android.util.Log.e("SearchFragment", "Artist has no browseId: " + item.getTitle());
+                android.util.Log.e("SearchFragment", "Artist has no ID: " + item.getTitle());
                 Toast.makeText(requireContext(), "Cannot open artist page", Toast.LENGTH_SHORT).show();
             }
         } else {
