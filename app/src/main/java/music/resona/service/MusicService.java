@@ -157,7 +157,12 @@ public class MusicService extends Service {
         filter.addAction(ACTION_PAUSE);
         filter.addAction(ACTION_NEXT);
         filter.addAction(ACTION_PREVIOUS);
-        registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(notificationReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+        } else {
+            registerReceiver(notificationReceiver, filter);
+        }
     }
     
     @Nullable
@@ -168,7 +173,10 @@ public class MusicService extends Service {
     
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        startForeground(NOTIFICATION_ID, createNotification());
+        // Only start foreground if we have a song
+        if (getCurrentSong() != null) {
+            startForeground(NOTIFICATION_ID, createNotification());
+        }
         return START_STICKY;
     }
     
@@ -207,11 +215,41 @@ public class MusicService extends Service {
         mediaSession = new MediaSessionCompat(this, "ResonaMusicService");
         mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS |
                              MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
+        
+        // Set callback for media button events
+        mediaSession.setCallback(new MediaSessionCompat.Callback() {
+            @Override
+            public void onPlay() {
+                resume();
+            }
+            
+            @Override
+            public void onPause() {
+                pause();
+            }
+            
+            @Override
+            public void onSkipToNext() {
+                playNext();
+            }
+            
+            @Override
+            public void onSkipToPrevious() {
+                playPrevious();
+            }
+            
+            @Override
+            public void onSeekTo(long pos) {
+                seekTo((int) pos);
+            }
+        });
+        
         mediaSession.setActive(true);
     }
     
     private Notification createNotification() {
         Intent notificationIntent = new Intent(this, MainActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
             this, 0, notificationIntent,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
@@ -219,7 +257,7 @@ public class MusicService extends Service {
         
         Song currentSong = getCurrentSong();
         String title = currentSong != null ? currentSong.getTitle() : "Resona";
-        String artist = currentSong != null ? currentSong.getArtist() : "Music Player";
+        String artist = currentSong != null && currentSong.getArtist() != null ? currentSong.getArtist() : "Music Player";
         
         // Create action intents
         PendingIntent playPauseIntent = PendingIntent.getBroadcast(
@@ -240,15 +278,41 @@ public class MusicService extends Service {
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
         
-        // Update media session playback state
+        // Get current position and duration safely
+        long position = 0;
+        long duration = 0;
+        if (mediaPlayer != null && !isPreparing) {
+            try {
+                position = mediaPlayer.getCurrentPosition();
+                duration = mediaPlayer.getDuration();
+                if (duration < 0) duration = 0;
+            } catch (Exception e) {
+                Log.e(TAG, "Error getting playback position", e);
+            }
+        }
+        
+        // Update media session metadata
         if (mediaSession != null) {
+            android.support.v4.media.MediaMetadataCompat.Builder metadataBuilder = 
+                new android.support.v4.media.MediaMetadataCompat.Builder()
+                    .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_TITLE, title)
+                    .putString(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ARTIST, artist)
+                    .putLong(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_DURATION, duration);
+            
+            if (currentAlbumArt != null) {
+                metadataBuilder.putBitmap(android.support.v4.media.MediaMetadataCompat.METADATA_KEY_ALBUM_ART, currentAlbumArt);
+            }
+            
+            mediaSession.setMetadata(metadataBuilder.build());
+            
+            // Update playback state with proper duration
             PlaybackStateCompat.Builder stateBuilder = new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY_PAUSE |
                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT |
-                           PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                           PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS |
+                           PlaybackStateCompat.ACTION_SEEK_TO)
                 .setState(isPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
-                         mediaPlayer != null && !isPreparing ? mediaPlayer.getCurrentPosition() : 0,
-                         1.0f);
+                         position, 1.0f);
             mediaSession.setPlaybackState(stateBuilder.build());
         }
         
@@ -257,7 +321,8 @@ public class MusicService extends Service {
             .setContentText(artist)
             .setSmallIcon(R.drawable.play)
             .setContentIntent(pendingIntent)
-            .setOngoing(true)
+            .setOngoing(isPlaying)
+            .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             // Media controls using android system icons
@@ -293,19 +358,31 @@ public class MusicService extends Service {
         }
         
         try {
-            Glide.with(this)
+            Glide.with(getApplicationContext())
                 .asBitmap()
                 .load(thumbnailUrl)
+                .override(512, 512) // Resize for notification
+                .centerCrop()
                 .into(new SimpleTarget<Bitmap>() {
                     @Override
                     public void onResourceReady(Bitmap resource, Transition<? super Bitmap> transition) {
                         currentAlbumArt = resource;
                         updateNotification();
+                        Log.d(TAG, "Album art loaded successfully");
+                    }
+                    
+                    @Override
+                    public void onLoadFailed(@Nullable android.graphics.drawable.Drawable errorDrawable) {
+                        super.onLoadFailed(errorDrawable);
+                        currentAlbumArt = null;
+                        updateNotification();
+                        Log.e(TAG, "Failed to load album art");
                     }
                 });
         } catch (Exception e) {
             Log.e(TAG, "Error loading album art", e);
             currentAlbumArt = null;
+            updateNotification();
         }
     }
     
@@ -377,8 +454,14 @@ public class MusicService extends Service {
         queue.clear();
         queue.add(song);
         currentIndex = 0;
-        playUrl(streamUrl);
+        
+        // Update notification immediately with new song info
         notifySongChanged(song);
+        loadAlbumArt(song.getThumbnailUrl());
+        updateNotification();
+        
+        // Start playing
+        playUrl(streamUrl);
     }
     
     public void playUrl(String url) {
@@ -389,6 +472,10 @@ public class MusicService extends Service {
         try {
             isPreparing = true;
             notifyLoadingStateChanged(true);
+            
+            // Update notification immediately to show loading state
+            updateNotification();
+            
             mediaPlayer.reset();
             mediaPlayer.setDataSource(url);
             mediaPlayer.prepareAsync();
@@ -406,6 +493,8 @@ public class MusicService extends Service {
             notifySongChanged(song);
             // Load album art for notification
             loadAlbumArt(song.getThumbnailUrl());
+            // Update notification immediately
+            updateNotification();
             // Stream URL will be fetched by MusicPlaybackManager
         }
     }
