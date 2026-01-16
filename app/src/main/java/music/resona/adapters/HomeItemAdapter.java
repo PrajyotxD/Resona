@@ -22,6 +22,7 @@ import java.util.Locale;
 import music.resona.MainActivity;
 import music.resona.R;
 import music.resona.activity.Vibe;
+import music.resona.cache.StreamCache;
 import music.resona.models.Song;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
@@ -78,6 +79,11 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         holder.ivThumbnail.setTransitionName(transitionName);
         
         setupItemClickListener(holder.itemView, holder.ivThumbnail, item, transitionName);
+        
+        // Prefetch stream URL for instant playback (non-blocking)
+        if (ITEM_TYPE_SONG.equals(item.getType()) && item.getId() != null) {
+            StreamCache.getInstance().prefetch(item.getId());
+        }
         
         // Apply typefaces
         music.resona.utils.UiUXUtil.typeface(context, holder.tvTitle, "akatski.ttf", android.graphics.Typeface.BOLD);

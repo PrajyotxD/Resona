@@ -17,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import music.resona.cache.SongPrefetchHelper;
+import music.resona.cache.StreamCache;
 import music.resona.models.Song;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.models.PlaybackDataResult;
@@ -174,83 +175,34 @@ public class MusicPlaybackManager {
     }
     
     /**
-     * Play a single song. Fetches stream URL and starts playback.
+     * Play a single song using StreamCache for instant playback.
+     * Uses LRU cache with 10-minute TTL and LOW quality for speed.
      */
     public void playSong(@NonNull Song song, @Nullable PlaybackCallback callback) {
         Log.d(TAG, "Playing song: " + song.getTitle());
         
-        // Check if we have a cached stream URL in our local cache
-        StreamUrlCache cached = streamUrlCache.get(song.getVideoId());
-        if (cached != null && cached.isValid()) {
-            Log.d(TAG, "Using cached stream URL for: " + song.getTitle());
-            playWithUrl(song, cached.url, callback);
-            return;
-        }
-        
-        // Check if song has cached URL
-        String cachedUrl = song.getCachedStreamUrl();
-        if (cachedUrl != null) {
-            Log.d(TAG, "Using song's cached stream URL: " + song.getTitle());
-            playWithUrl(song, cachedUrl, callback);
-            return;
-        }
-        
-        // Check the SongPrefetchHelper cache (from home feed prefetching)
-        String prefetchedUrl = SongPrefetchHelper.getInstance().getCachedStreamUrl(song.getVideoId());
-        if (prefetchedUrl != null) {
-            Log.d(TAG, "Using prefetched stream URL for: " + song.getTitle());
-            long expiryTime = SongPrefetchHelper.getInstance().getCacheExpiry(song.getVideoId());
-            // Cache locally too
-            streamUrlCache.put(song.getVideoId(), new StreamUrlCache(prefetchedUrl, expiryTime));
-            song.setCachedStreamUrl(prefetchedUrl, expiryTime);
-            playWithUrl(song, prefetchedUrl, callback);
-            return;
-        }
-        
-        // Fetch stream URL
+        // IMMEDIATE: Update UI right away for instant visual feedback
+        currentSong = song;
         isLoading = true;
         notifyLoadingState(true);
+        for (PlaybackListener listener : listeners) {
+            listener.onSongChanged(song);
+        }
         
-        executor.execute(() -> {
-            try {
-                PlaybackDataResult result = InnertubeBridge.getPlaybackDataSync(song.getVideoId());
-                
-                if (result != null && result.getStreamUrl() != null && !result.getStreamUrl().isEmpty()) {
-                    String streamUrl = result.getStreamUrl();
-                    long expiryTime = System.currentTimeMillis() + (result.getStreamExpiresInSeconds() * 1000L);
-                    
-                    // Cache the URL
-                    streamUrlCache.put(song.getVideoId(), new StreamUrlCache(streamUrl, expiryTime));
-                    song.setCachedStreamUrl(streamUrl, expiryTime);
-                    
-                    android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                    mainHandler.post(() -> {
-                        playWithUrl(song, streamUrl, callback);
-                        // Prefetch next songs
-                        prefetchNextSongs(song);
-                    });
-                } else {
-                    android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                    mainHandler.post(() -> {
-                        isLoading = false;
-                        notifyLoadingState(false);
-                        if (callback != null) {
-                            callback.onError("Failed to get stream URL");
-                        }
-                    });
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error fetching stream URL", e);
-                android.os.Handler mainHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-                mainHandler.post(() -> {
-                    isLoading = false;
-                    notifyLoadingState(false);
-                    if (callback != null) {
-                        callback.onError("Error: " + e.getMessage());
-                    }
-                });
+        // Use StreamCache - returns immediately if cached, fetches if not
+        String streamUrl = StreamCache.getInstance().getStreamUrl(song.getVideoId());
+        
+        if (streamUrl != null) {
+            playWithUrl(song, streamUrl, callback);
+            // Prefetch next songs in queue
+            prefetchNextSongs(song);
+        } else {
+            isLoading = false;
+            notifyLoadingState(false);
+            if (callback != null) {
+                callback.onError("Failed to get stream URL");
             }
-        });
+        }
     }
     
     /**
@@ -306,29 +258,11 @@ public class MusicPlaybackManager {
     }
     
     /**
-     * Prefetch stream URLs for upcoming songs for instant playback.
+     * Prefetch stream URLs for upcoming songs using StreamCache.
+     * Non-blocking, uses LRU cache with automatic eviction.
      */
     public void prefetchStreamUrl(@NonNull Song song) {
-        if (streamUrlCache.containsKey(song.getVideoId())) {
-            StreamUrlCache cached = streamUrlCache.get(song.getVideoId());
-            if (cached != null && cached.isValid()) {
-                return; // Already cached
-            }
-        }
-        
-        executor.execute(() -> {
-            try {
-                PlaybackDataResult result = InnertubeBridge.getPlaybackDataSync(song.getVideoId());
-                if (result != null && result.getStreamUrl() != null) {
-                    long expiryTime = System.currentTimeMillis() + (result.getStreamExpiresInSeconds() * 1000L);
-                    streamUrlCache.put(song.getVideoId(), new StreamUrlCache(result.getStreamUrl(), expiryTime));
-                    song.setCachedStreamUrl(result.getStreamUrl(), expiryTime);
-                    Log.d(TAG, "Prefetched stream URL for: " + song.getTitle());
-                }
-            } catch (Exception e) {
-                Log.e(TAG, "Error prefetching: " + song.getTitle(), e);
-            }
-        });
+        StreamCache.getInstance().prefetch(song.getVideoId());
     }
     
     /**
@@ -349,10 +283,10 @@ public class MusicPlaybackManager {
         
         if (currentIndex < 0) return;
         
-        // Prefetch next PREFETCH_COUNT songs
+        // Prefetch next PREFETCH_COUNT songs using StreamCache
         for (int i = 1; i <= PREFETCH_COUNT && (currentIndex + i) < queue.size(); i++) {
             Song nextSong = queue.get(currentIndex + i);
-            prefetchStreamUrl(nextSong);
+            StreamCache.getInstance().prefetch(nextSong.getVideoId());
         }
     }
     
@@ -362,7 +296,7 @@ public class MusicPlaybackManager {
     public void prefetchSongs(@NonNull List<Song> songs) {
         int count = Math.min(songs.size(), PREFETCH_COUNT);
         for (int i = 0; i < count; i++) {
-            prefetchStreamUrl(songs.get(i));
+            StreamCache.getInstance().prefetch(songs.get(i).getVideoId());
         }
     }
     
