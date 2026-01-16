@@ -48,6 +48,28 @@ public class HomeSectionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
     }
 
     /**
+     * Updates all sections (used for filtering or refresh).
+     * 
+     * @param newSections the new list of sections
+     */
+    public void updateSections(@NonNull List<HomeSectionResult> newSections) {
+        this.sections.clear();
+        this.sections.addAll(newSections);
+        notifyDataSetChanged();
+    }
+
+    /**
+     * Adds more sections (used for pagination).
+     * 
+     * @param newSections the new sections to append
+     */
+    public void addSections(@NonNull List<HomeSectionResult> newSections) {
+        int oldSize = this.sections.size();
+        this.sections.addAll(newSections);
+        notifyItemRangeInserted(oldSize * ITEMS_PER_SECTION, newSections.size() * ITEMS_PER_SECTION);
+    }
+
+    /**
      * Determines the view type for the given position.
      * 
      * <p>Even positions (0, 2, 4...) are section titles.<br>

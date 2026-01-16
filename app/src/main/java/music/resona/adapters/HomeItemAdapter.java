@@ -72,7 +72,12 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         holder.tvTitle.setText(item.getTitle());
         holder.tvSubtitle.setText(buildSubtitle(item));
         loadThumbnail(holder.ivThumbnail, item.getThumbnail());
-        setupItemClickListener(holder.itemView, item);
+        
+        // Set unique transition name for shared element animation
+        String transitionName = "thumbnail_" + item.getId() + "_" + position;
+        holder.ivThumbnail.setTransitionName(transitionName);
+        
+        setupItemClickListener(holder.itemView, holder.ivThumbnail, item, transitionName);
         
         // Apply typefaces
         music.resona.utils.UiUXUtil.typeface(context, holder.tvTitle, "akatski.ttf", android.graphics.Typeface.BOLD);
@@ -195,25 +200,31 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
      * Sets up click listener for item interactions.
      * 
      * @param itemView the item view
+     * @param imageView the thumbnail ImageView for transition
      * @param item the item data
+     * @param transitionName the unique transition name
      */
-    private void setupItemClickListener(@NonNull View itemView, @NonNull YTItemResult item) {
-        itemView.setOnClickListener(v -> handleItemClick(item));
+    private void setupItemClickListener(@NonNull View itemView, @NonNull ImageView imageView, 
+                                       @NonNull YTItemResult item, @NonNull String transitionName) {
+        itemView.setOnClickListener(v -> handleItemClick(imageView, item, transitionName));
     }
     
     /**
      * Handles item click events.
      * 
+     * @param imageView the thumbnail ImageView for transition
      * @param item the clicked item
+     * @param transitionName the transition name for shared element
      */
-    private void handleItemClick(@NonNull YTItemResult item) {
+    private void handleItemClick(@NonNull ImageView imageView, @NonNull YTItemResult item, 
+                                @NonNull String transitionName) {
         Log.d(TAG, "Clicked: " + item.getTitle() + " (Type: " + item.getType() + ")");
         
         String type = item.getType();
         
-        // For albums and playlists - open Vibe activity
+        // For albums and playlists - open Vibe activity with transition
         if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type)) {
-            openVibeActivity(item);
+            openVibeActivity(imageView, item, transitionName);
         } else if (ITEM_TYPE_SONG.equals(type)) {
             // Play the song directly
             playSong(item);
@@ -259,11 +270,14 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
     }
     
     /**
-     * Opens the Vibe activity for albums, playlists, and singles.
+     * Opens the Vibe activity for albums, playlists, and singles with shared element transition.
      * 
+     * @param imageView the thumbnail ImageView for transition
      * @param item the item to display
+     * @param transitionName the transition name
      */
-    private void openVibeActivity(@NonNull YTItemResult item) {
+    private void openVibeActivity(@NonNull ImageView imageView, @NonNull YTItemResult item, 
+                                 @NonNull String transitionName) {
         Intent intent = new Intent(context, Vibe.class);
         
         // Determine browseId - use browseId for albums/artists, playlistId for playlists
@@ -282,8 +296,18 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         intent.putExtra("title", item.getTitle());
         intent.putExtra("subtitle", subtitle);
         intent.putExtra("thumbnailUrl", item.getThumbnail());
+        intent.putExtra("transitionName", transitionName);
         
-        context.startActivity(intent);
+        if (context instanceof android.app.Activity) {
+            android.app.Activity activity = (android.app.Activity) context;
+            android.os.Bundle options = android.app.ActivityOptions
+                .makeSceneTransitionAnimation(activity, imageView, transitionName)
+                .toBundle();
+            context.startActivity(intent, options);
+        } else {
+            context.startActivity(intent);
+        }
+        
         Log.d(TAG, "Opening Vibe activity for: " + item.getTitle() + " (browseId: " + browseId + ")");
     }
 

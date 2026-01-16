@@ -33,4 +33,7 @@
     <string name="various_artists">Various Artists</string>
     <string name="watermark">Resona Music</string>
     
+    <!-- Home Feed -->
+    <string name="profile_avatar">Profile Avatar</string>
+    
 </resources>

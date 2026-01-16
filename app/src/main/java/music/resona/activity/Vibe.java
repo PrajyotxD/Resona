@@ -98,6 +98,7 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     private String title;
     private String subtitle;
     private String thumbnailUrl;
+    private String transitionName;
     
     // Song data
     private List<SongItem> allSongs = new ArrayList<>();
@@ -106,6 +107,26 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable shared element transitions with custom animations
+        getWindow().requestFeature(android.view.Window.FEATURE_CONTENT_TRANSITIONS);
+        getWindow().setSharedElementEnterTransition(
+            android.transition.TransitionInflater.from(this)
+                .inflateTransition(R.transition.shared_image_transition)
+        );
+        getWindow().setSharedElementExitTransition(
+            android.transition.TransitionInflater.from(this)
+                .inflateTransition(R.transition.shared_image_transition)
+        );
+        getWindow().setEnterTransition(
+            android.transition.TransitionInflater.from(this)
+                .inflateTransition(R.transition.fade_in)
+        );
+        getWindow().setExitTransition(
+            android.transition.TransitionInflater.from(this)
+                .inflateTransition(R.transition.fade_out)
+        );
+        
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_vibe);
         
@@ -125,6 +146,7 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         title = getIntent().getStringExtra("title");
         subtitle = getIntent().getStringExtra("subtitle");
         thumbnailUrl = getIntent().getStringExtra("thumbnailUrl");
+        transitionName = getIntent().getStringExtra("transitionName");
     }
     
     private void initViews() {
@@ -148,6 +170,11 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         btnMore = findViewById(R.id.btn_more);
         btnShare = findViewById(R.id.btn_share);
         btnPlay = findViewById(R.id.btn_play);
+        
+        // Set transition name for shared element animation
+        if (transitionName != null) {
+            albumArtwork.setTransitionName(transitionName);
+        }
         
         btnBack.setOnClickListener(v -> onBackPressed());
         btnSearch.setOnClickListener(v -> showSearchBar());

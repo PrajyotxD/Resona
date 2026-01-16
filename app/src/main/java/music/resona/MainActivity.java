@@ -57,6 +57,11 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
     private AccountInfoViewModel accountInfoViewModel;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     
+    // Fragment instances - cached for state retention
+    private HomeFeed homeFeedFragment;
+    private SearchFragment searchFragment;
+    private Fragment currentFragment;
+    
     private final ActivityResultLauncher<Intent> authLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
             result -> {
@@ -70,6 +75,10 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable shared element transitions
+        getWindow().requestFeature(android.view.Window.FEATURE_CONTENT_TRANSITIONS);
+        
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main2);
         
@@ -83,7 +92,21 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
         playbackManager.addListener(this);
         
         if (savedInstanceState == null) {
-            loadFragment(HomeFeed.newInstance());
+            // Initialize cached fragments
+            homeFeedFragment = HomeFeed.newInstance();
+            searchFragment = new SearchFragment();
+            
+            // Load home feed as initial fragment
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .add(R.id.fragment_container, homeFeedFragment, "HOME")
+                    .commit();
+            currentFragment = homeFeedFragment;
+        } else {
+            // Restore cached fragments after configuration change
+            homeFeedFragment = (HomeFeed) getSupportFragmentManager().findFragmentByTag("HOME");
+            searchFragment = (SearchFragment) getSupportFragmentManager().findFragmentByTag("SEARCH");
+            currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
         }
         
         // Restore mini player state if song is playing
@@ -218,12 +241,14 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
                 .addTab(R.drawable.ic_library, "Library")
                 .addTab(R.drawable.ic_settings, "Settings")
                 .addTab(R.drawable.ic_plugin, "Plugin");
-            
+
+
             // Set selection listener
             bottomNavigation.setOnTabSelectedListener((position, tab) -> {
-                Fragment fragment = getFragmentForNavPosition(position);
-                if (fragment != null) {
-                    loadFragment(fragment);
+                if(position==0){
+                    switchToFragment(homeFeedFragment, "HOME");
+                } else if (position==1) {
+                    switchToFragment(searchFragment, "SEARCH");
                 }
             });
             
@@ -422,16 +447,31 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
     }
     
     /**
-     * Loads the specified fragment into the fragment container.
+     * Switches to the specified fragment using show/hide to preserve state.
      * 
-     * @param fragment the fragment to load
-     * @return true if the fragment was loaded successfully
+     * @param fragment the fragment to switch to
+     * @param tag the fragment tag
      */
-    private boolean loadFragment(@NonNull Fragment fragment) {
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragment_container, fragment)
-                .commit();
-        return true;
+    private void switchToFragment(@NonNull Fragment fragment, @NonNull String tag) {
+        if (currentFragment == fragment) {
+            return; // Already showing this fragment
+        }
+        
+        androidx.fragment.app.FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        
+        // Hide current fragment if exists
+        if (currentFragment != null) {
+            transaction.hide(currentFragment);
+        }
+        
+        // Show or add the target fragment
+        if (fragment.isAdded()) {
+            transaction.show(fragment);
+        } else {
+            transaction.add(R.id.fragment_container, fragment, tag);
+        }
+        
+        transaction.commit();
+        currentFragment = fragment;
     }
 }
