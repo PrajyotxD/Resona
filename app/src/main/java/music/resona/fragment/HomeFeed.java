@@ -3,11 +3,14 @@ package music.resona.fragment;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -29,41 +32,62 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
-import music.resona.App;
 import music.resona.R;
-import music.resona.adapters.HomeSectionAdapter;
 import music.resona.MainActivity;
+import music.resona.adapters.HomeSectionAdapter;
+import music.resona.adapters.QuickPicksAdapter;
+import music.resona.app.App;
+import music.resona.cache.SongPrefetchHelper;
 import music.resona.online.bridge.models.ChipResult;
+import music.resona.online.bridge.models.HomeSectionResult;
+import music.resona.online.bridge.models.YTItemResult;
 import music.resona.viewmodel.AccountInfoViewModel;
+import music.resona.viewmodel.HomeFeedViewModel;
 
 /**
- * Fragment displaying the YouTube Music home feed.
+ * Optimized HomeFeed Fragment with improved performance and smooth pagination.
  * 
- * <p>Features:</p>
+ * <p>Key improvements:</p>
  * <ul>
- *   <li>Displays home sections in a RecyclerView</li>
- *   <li>Observes ViewModel LiveData for data updates</li>
- *   <li>Handles infinite scroll pagination</li>
- *   <li>Shows loading states and error messages</li>
+ *   <li>Custom skeleton loading instead of shimmer</li>
+ *   <li>Debounced scroll-based pagination</li>
+ *   <li>Separate loading states for initial and pagination</li>
+ *   <li>Better memory management</li>
+ *   <li>Optimized view binding and updates</li>
  * </ul>
  */
 public class HomeFeed extends Fragment {
 
     private static final String TAG = "HomeFeed";
-    private static final int PAGINATION_SCROLL_BUFFER_PX = 200;
+    private static final int PAGINATION_THRESHOLD_PX = 300;
+    private static final long DATA_LOAD_RETRY_MS = 1000;
     
-    private HomeFeedView viewModel;
-    private RecyclerView recyclerView;
+    // ViewModels
+    private HomeFeedViewModel viewModel;
+    private AccountInfoViewModel accountInfoViewModel;
+    
+    // Views
+    private NestedScrollView scrollView;
+    private RecyclerView sectionsRecyclerView;
     private RecyclerView quickPicksRecyclerView;
-    private dev.ui.obscura.shimmer.ShimmerLayout skeletonLoader;
+    private LinearLayout quickPicksSection;
+    private View skeletonLoader;
+    private View paginationLoader;
     private ChipGroup chipGroup;
-    private NestedScrollView homeScrollView;
-    private HomeSectionAdapter adapter;
     private ImageView profileImageView;
     private TextView greetingTextView;
     private TextView usernameTextView;
-    private AccountInfoViewModel accountInfoViewModel;
-
+    
+    // Adapters
+    private HomeSectionAdapter sectionsAdapter;
+    private QuickPicksAdapter quickPicksAdapter;
+    
+    // State
+    private boolean isLoadingInitialData = false;
+    private int previousSectionCount = 0;
+    private boolean hasLoadedData = false;
+    private int savedScrollPosition = 0;
+    
     @NonNull
     public static HomeFeed newInstance() {
         return new HomeFeed();
@@ -72,78 +96,173 @@ public class HomeFeed extends Fragment {
     @Override
     public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
-        Log.d(TAG, "onCreateView called");
         View view = inflater.inflate(R.layout.fragment_home_feed, container, false);
         
         initializeViews(view);
-        setupRecyclerView();
-        setupScrollBehavior();
-        setupHeaderInteractions();
+        setupRecyclerViews();
+        setupScrollListener();
+        setupHeader();
+
+        initializeViewModels();
+        observeViewModels();
+        
+        // Only load data if not already loaded
+        if (!hasLoadedData) {
+            loadInitialData();
+        } else {
+            // Data already loaded, just hide skeleton
+            if (skeletonLoader != null) {
+                skeletonLoader.setVisibility(View.GONE);
+            }
+            // Restore scroll position
+            if (scrollView != null && savedScrollPosition > 0) {
+                scrollView.post(() -> scrollView.scrollTo(0, savedScrollPosition));
+            }
+        }
         
         return view;
     }
-
-    @Override
-    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-        Log.d(TAG, "onActivityCreated called");
-        
-        initializeViewModel();
-        observeViewModel();
-        loadHomeData();
-        observeAccountInfo();
-    }
     
-    /**
-     * Initializes view references.
-     * 
-     * @param view the root view
-     */
     private void initializeViews(@NonNull View view) {
-        recyclerView = view.findViewById(R.id.recyclerview1);
-        quickPicksRecyclerView = view.findViewById(R.id.rvQuickPicks);
+        scrollView = view.findViewById(R.id.home_scroll_container);
+        sectionsRecyclerView = view.findViewById(R.id.recyclerview_sections);
+        quickPicksRecyclerView = view.findViewById(R.id.rv_quick_picks);
+        quickPicksSection = view.findViewById(R.id.ll_quick_picks_section);
         skeletonLoader = view.findViewById(R.id.skeleton_loader);
+        paginationLoader = view.findViewById(R.id.pagination_loader);
         chipGroup = view.findViewById(R.id.chips);
-        homeScrollView = view.findViewById(R.id.home_scroll_container);
         profileImageView = view.findViewById(R.id.home_profile_avatar);
         greetingTextView = view.findViewById(R.id.home_greeting_text);
         usernameTextView = view.findViewById(R.id.home_username_text);
-    }
-    
-    /**
-     * Initializes the ViewModel.
-     */
-    private void initializeViewModel() {
-        viewModel = new ViewModelProvider(this).get(HomeFeedView.class);
-        Log.d(TAG, "ViewModel initialized");
-    }
-    
-    /**
-     * Configures the RecyclerView with adapter and scroll listener.
-     */
-    private void setupRecyclerView() {
-        Log.d(TAG, "Setting up RecyclerView");
         
-        adapter = new HomeSectionAdapter(requireContext(), new ArrayList<>());
-        recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-        recyclerView.setAdapter(adapter);
+        // Start animated gradient background
+        View rootView = view.findViewById(R.id.home_feed_root);
+        if (rootView != null && rootView.getBackground() instanceof android.graphics.drawable.AnimationDrawable) {
+            ((android.graphics.drawable.AnimationDrawable) rootView.getBackground()).start();
+        }
         
-        // Setup quick picks as grid with 4 rows
-        if (quickPicksRecyclerView != null) {
-            androidx.recyclerview.widget.GridLayoutManager gridLayout = 
-                new androidx.recyclerview.widget.GridLayoutManager(
-                    requireContext(), 
-                    4, // 4 rows
-                    androidx.recyclerview.widget.GridLayoutManager.HORIZONTAL,
-                    false
-                );
-            quickPicksRecyclerView.setLayoutManager(gridLayout);
-            quickPicksRecyclerView.setNestedScrollingEnabled(false);
+        // Initially show skeleton, hide content and pagination loader
+        skeletonLoader.setVisibility(View.VISIBLE);
+        paginationLoader.setVisibility(View.GONE);
+        
+        // Start shimmer animation
+        View shimmerOverlay = skeletonLoader.findViewById(R.id.shimmer_overlay);
+        if (shimmerOverlay != null) {
+            shimmerOverlay.startAnimation(android.view.animation.AnimationUtils.loadAnimation(
+                requireContext(), R.anim.skeleton_shimmer_anim));
         }
     }
-
-    private void setupHeaderInteractions() {
-        updateGreetingText();
+    
+    private void initializeViewModels() {
+        viewModel = new ViewModelProvider(this).get(HomeFeedViewModel.class);
+        accountInfoViewModel = new ViewModelProvider(requireActivity()).get(AccountInfoViewModel.class);
+    }
+    
+    private void setupRecyclerViews() {
+        // Setup sections RecyclerView
+        sectionsAdapter = new HomeSectionAdapter(requireContext(), new ArrayList<>());
+        sectionsRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+        sectionsRecyclerView.setAdapter(sectionsAdapter);
+        sectionsRecyclerView.setNestedScrollingEnabled(false);
+        sectionsRecyclerView.setItemAnimator(null); // Disable animations for better performance
+        
+        // Setup quick picks RecyclerView with horizontal scrolling grid (4 rows per column)
+        androidx.recyclerview.widget.GridLayoutManager quickPicksLayoutManager = 
+            new androidx.recyclerview.widget.GridLayoutManager(
+                requireContext(),
+                4, // 4 songs per column (4 rows)
+                androidx.recyclerview.widget.GridLayoutManager.HORIZONTAL, // Scroll horizontally
+                false
+            );
+        quickPicksRecyclerView.setLayoutManager(quickPicksLayoutManager);
+        
+        // Add spacing between grid items (8dp vertical, 4dp horizontal)
+        int verticalSpacingPx = (int) (3 * getResources().getDisplayMetrics().density);
+        int horizontalSpacingPx = (int) (2 * getResources().getDisplayMetrics().density);
+        quickPicksRecyclerView.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
+            @Override
+            public void getItemOffsets(@androidx.annotation.NonNull android.graphics.Rect outRect,
+                                     @androidx.annotation.NonNull android.view.View view,
+                                     @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView parent,
+                                     @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.State state) {
+                androidx.recyclerview.widget.GridLayoutManager layoutManager = 
+                    (androidx.recyclerview.widget.GridLayoutManager) parent.getLayoutManager();
+                if (layoutManager == null) return;
+                
+                int position = parent.getChildAdapterPosition(view);
+                int spanIndex = layoutManager.getSpanSizeLookup().getSpanIndex(position, layoutManager.getSpanCount());
+                
+                // Add vertical spacing between rows (except top row)
+                if (spanIndex > 0) {
+                    outRect.top = verticalSpacingPx;
+                }
+                
+                // Add horizontal spacing between columns (except first column)
+                int column = position / 4; // Which column (0-indexed)
+                if (column > 0) {
+                    outRect.left = horizontalSpacingPx;
+                }
+            }
+        });
+        
+        // Add scroll listener for Quick Picks pagination (horizontal scrolling grid)
+        quickPicksRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                
+                // Only trigger on rightward scroll (dx > 0)
+                if (dx <= 0) return;
+                
+                androidx.recyclerview.widget.GridLayoutManager layoutManager = 
+                    (androidx.recyclerview.widget.GridLayoutManager) recyclerView.getLayoutManager();
+                if (layoutManager == null) return;
+                
+                int visibleItemCount = layoutManager.getChildCount();
+                int totalItemCount = layoutManager.getItemCount();
+                int lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition();
+                
+                // Load more when user is within 2 columns (8 items) from the end
+                if ((lastVisibleItemPosition + 8) >= totalItemCount) {
+                    if (viewModel.canLoadMoreQuickPicks()) {
+                        Log.d(TAG, "Near end of Quick Picks grid, loading more...");
+                        viewModel.loadMoreQuickPicks();
+                    }
+                }
+            }
+        });
+        
+        quickPicksRecyclerView.setNestedScrollingEnabled(false);
+        quickPicksRecyclerView.setVisibility(View.GONE);
+    }
+    
+    private void setupScrollListener() {
+        if (scrollView == null) return;
+        
+        scrollView.setOnScrollChangeListener((NestedScrollView.OnScrollChangeListener)
+                (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
+                    // Only trigger on downward scroll
+                    if (scrollY <= oldScrollY) return;
+                    
+                    // Check if near bottom
+                    if (isNearBottom(v)) {
+                        Log.d(TAG, "Near bottom, requesting more data");
+                        viewModel.loadMoreData();
+                    }
+                });
+    }
+    
+    private boolean isNearBottom(@NonNull NestedScrollView scrollView) {
+        if (scrollView.getChildCount() == 0) return false;
+        
+        View content = scrollView.getChildAt(0);
+        int diff = content.getBottom() - (scrollView.getHeight() + scrollView.getScrollY());
+        return diff <= PAGINATION_THRESHOLD_PX;
+    }
+    
+    private void setupHeader() {
+        updateGreeting();
+        
         if (profileImageView != null) {
             profileImageView.setOnClickListener(v -> {
                 if (requireActivity() instanceof MainActivity) {
@@ -152,7 +271,7 @@ public class HomeFeed extends Fragment {
             });
         }
         
-        // Apply typefaces using UiUXUtil
+        // Apply custom fonts
         if (usernameTextView != null) {
             music.resona.utils.UiUXUtil.typeface(requireContext(), usernameTextView, "akatski.ttf", android.graphics.Typeface.BOLD);
         }
@@ -160,131 +279,86 @@ public class HomeFeed extends Fragment {
             music.resona.utils.UiUXUtil.typeface(requireContext(), greetingTextView, "medium.ttf", android.graphics.Typeface.NORMAL);
         }
     }
-
-    private void observeAccountInfo() {
-        accountInfoViewModel = new ViewModelProvider(requireActivity()).get(AccountInfoViewModel.class);
+    
+    private void updateGreeting() {
+        if (greetingTextView == null) return;
+        
+        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
+        String greeting;
+        if (hour < 12) greeting = "Good Morning!";
+        else if (hour < 17) greeting = "Good Afternoon!";
+        else if (hour < 21) greeting = "Good Evening!";
+        else greeting = "Good Night!";
+        
+        greetingTextView.setText(greeting);
+    }
+    
+    private void observeViewModels() {
+        // Observe home sections
+        viewModel.getHomeSections().observe(getViewLifecycleOwner(), this::handleSectionsUpdate);
+        
+        // Observe chips
+        viewModel.getChips().observe(getViewLifecycleOwner(), this::handleChipsUpdate);
+        
+        // Observe quick picks
+        viewModel.getQuickPicks().observe(getViewLifecycleOwner(), this::handleQuickPicksUpdate);
+        
+        // Observe loading state
+        viewModel.getLoadingState().observe(getViewLifecycleOwner(), this::handleLoadingStateUpdate);
+        
+        // Observe errors
+        viewModel.getErrorMessage().observe(getViewLifecycleOwner(), this::handleErrorUpdate);
+        
+        // Observe account info
         accountInfoViewModel.getAccountInfo().observe(getViewLifecycleOwner(), state -> {
-            if (state == null) return;
-            updateHeader(state.displayName, state.avatarUrl, state.authenticated);
+            if (state != null) {
+                updateHeader(state.displayName, state.avatarUrl, state.authenticated);
+            }
         });
     }
-
-    private void updateHeader(@Nullable String displayName,
-                              @Nullable String avatarUrl,
-                              boolean authenticated) {
-        if (usernameTextView != null) {
-            String fallback = authenticated ? "User" : "Guest";
-            usernameTextView.setText(displayName != null && !displayName.isEmpty() ? displayName : fallback);
-        }
-
-        if (profileImageView != null) {
-            if (avatarUrl != null && !avatarUrl.isEmpty()) {
-                Glide.with(this)
-                        .load(avatarUrl)
-                        .circleCrop()
-                        .diskCacheStrategy(DiskCacheStrategy.ALL)
-                        .placeholder(R.drawable.memefi)
-                        .error(R.drawable.memefi)
-                        .into(profileImageView);
-            } else {
-                profileImageView.setImageResource(R.drawable.memefi);
-            }
-        }
-    }
-
-    private void updateGreetingText() {
-        if (greetingTextView == null) return;
-        greetingTextView.setText(getGreetingForNow());
-    }
-
-    private String getGreetingForNow() {
-        int hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY);
-        if (hour < 12) return "Good Morning!";
-        if (hour < 17) return "Good Afternoon!";
-        if (hour < 21) return "Good Evening!";
-        return "Good Night!";
-    }
-
-    private void handleChipSelection(ChipResult chip) {
-        if (chip.getBrowseId() == null && chip.getParams() == null) {
-            Log.w(TAG, "Chip has no browseId or params, skipping filter");
+    
+    private void handleSectionsUpdate(@NonNull List<HomeSectionResult> sections) {
+        Log.d(TAG, "Sections updated: " + sections.size() + ", previous: " + previousSectionCount);
+        
+        if (sections.isEmpty()) {
             return;
         }
         
-        Log.d(TAG, "Filtering feed with chip: " + chip.getTitle());
-        if (viewModel != null) {
-            viewModel.filterByChip(chip);
+        // Check if this is pagination (more items added) or fresh load
+        boolean isPagination = previousSectionCount > 0 && sections.size() > previousSectionCount;
+        
+        if (sectionsAdapter == null) {
+            // First time: create adapter
+            sectionsAdapter = new HomeSectionAdapter(requireContext(), sections);
+            sectionsRecyclerView.setAdapter(sectionsAdapter);
+            previousSectionCount = sections.size();
+        } else if (isPagination) {
+            // Pagination: add only new sections without reloading existing ones
+            List<HomeSectionResult> newSections = sections.subList(previousSectionCount, sections.size());
+            Log.d(TAG, "Pagination detected, adding " + newSections.size() + " new sections");
+            sectionsAdapter.addSections(newSections);
+            previousSectionCount = sections.size();
+        } else {
+            // Fresh load (filter or refresh): update all sections
+            Log.d(TAG, "Fresh load detected, updating all sections");
+            sectionsAdapter.updateSections(sections);
+            previousSectionCount = sections.size();
         }
-    }
-    /**
-     * Configures scroll behavior when RecyclerView is wrapped in NestedScrollView.
-     */
-    private void setupScrollBehavior() {
-        if (homeScrollView == null) return;
-
-        homeScrollView.setOnScrollChangeListener((NestedScrollView.OnScrollChangeListener)
-                (v, scrollX, scrollY, oldScrollX, oldScrollY) -> {
-                    if (scrollY <= oldScrollY) return;
-                    if (isNearBottom(v)) {
-                        requestNextPage();
-                    }
-                });
-    }
-
-    private boolean isNearBottom(@NonNull NestedScrollView scrollView) {
-        if (scrollView.getChildCount() == 0) return false;
-        View content = scrollView.getChildAt(scrollView.getChildCount() - 1);
-        int diff = content.getBottom() - (scrollView.getHeight() + scrollView.getScrollY());
-        return diff <= PAGINATION_SCROLL_BUFFER_PX;
-    }
-
-    private void requestNextPage() {
-        if (viewModel != null && viewModel.canLoadMore()) {
-            viewModel.loadMoreData();
-        }
-    }
-    
-    /**
-     * Sets up LiveData observers for ViewModel data changes.
-     */
-    private void observeViewModel() {
-        Log.d(TAG, "Setting up LiveData observers");
         
-        viewModel.getHomeSections().observe(getViewLifecycleOwner(), this::handleSectionsUpdate);
-        viewModel.getChips().observe(getViewLifecycleOwner(), this::handleChipsUpdate);
-        viewModel.getQuickPicks().observe(getViewLifecycleOwner(), this::handleQuickPicksUpdate);
-        viewModel.getLoadingState().observe(getViewLifecycleOwner(), this::handleLoadingStateUpdate);
-        viewModel.getErrorMessage().observe(getViewLifecycleOwner(), this::handleErrorUpdate);
-    }
-    
-    /**
-     * Handles home sections data updates.
-     * 
-     * @param sections the updated list of sections
-     */
-    private void handleSectionsUpdate(@NonNull java.util.List<music.resona.online.bridge.models.HomeSectionResult> sections) {
-        Log.d(TAG, "Sections updated: " + sections.size() + " sections");
-        
-        adapter = new HomeSectionAdapter(requireContext(), sections);
-        recyclerView.setAdapter(adapter);
-        
-        if (!sections.isEmpty() && skeletonLoader != null) {
+        // Hide skeleton on first data
+        if (skeletonLoader.getVisibility() == View.VISIBLE && !sections.isEmpty()) {
             skeletonLoader.setVisibility(View.GONE);
+            hasLoadedData = true;
         }
     }
     
-    /**
-     * Handles chips/filters update.
-     * 
-     * @param chips the list of filter chips
-     */
     private void handleChipsUpdate(@Nullable List<ChipResult> chips) {
         if (chips == null || chips.isEmpty() || chipGroup == null) return;
-
+        
         Log.d(TAG, "Chips updated: " + chips.size());
         chipGroup.removeAllViews();
         chipGroup.setSingleSelection(true);
-
+        
         int[][] states = new int[][] {
             new int[] { android.R.attr.state_checked },
             new int[] { -android.R.attr.state_checked }
@@ -299,15 +373,15 @@ public class HomeFeed extends Fragment {
         };
         ColorStateList backgroundStateList = new ColorStateList(states, backgroundColors);
         ColorStateList strokeStateList = new ColorStateList(states, strokeColors);
-
+        
         for (ChipResult chipResult : chips) {
             Chip chip = new Chip(
-                    new android.view.ContextThemeWrapper(requireContext(), R.style.ResonaChip),
-                    null, 0
+                new android.view.ContextThemeWrapper(requireContext(), R.style.ResonaChip),
+                null, 0
             );
-
+            
             ChipDrawable drawable = ChipDrawable.createFromAttributes(
-                    requireContext(), null, 0, R.style.ResonaChip
+                requireContext(), null, 0, R.style.ResonaChip
             );
             drawable.setChipBackgroundColor(backgroundStateList);
             drawable.setChipStrokeColor(strokeStateList);
@@ -320,84 +394,155 @@ public class HomeFeed extends Fragment {
             chip.setEnsureMinTouchTargetSize(false);
             chip.setCloseIconVisible(false);
             chip.setChipIconVisible(false);
-
+            
             chip.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 if (isChecked) {
                     Log.d(TAG, "Chip selected: " + chipResult.getTitle());
-                    handleChipSelection(chipResult);
+                    viewModel.filterByChip(chipResult);
                 }
             });
-
+            
             chipGroup.addView(chip);
         }
     }
     
-    private void handleQuickPicksUpdate(@Nullable List<music.resona.online.bridge.models.YTItemResult> picks) {
-        Log.d(TAG, "handleQuickPicksUpdate called");
-        Log.d(TAG, "Quick picks: " + (picks != null ? picks.size() : "null"));
-        Log.d(TAG, "RecyclerView: " + (quickPicksRecyclerView != null ? "exists" : "null"));
+    private void handleQuickPicksUpdate(@Nullable List<YTItemResult> picks) {
+        Log.d(TAG, "Quick picks updated: " + (picks != null ? picks.size() : 0));
         
-        if (picks == null || picks.isEmpty() || quickPicksRecyclerView == null) {
-            Log.w(TAG, "Hiding quick picks - picks empty or RV null");
-            if (quickPicksRecyclerView != null) {
-                quickPicksRecyclerView.setVisibility(View.GONE);
+        if (picks == null || picks.isEmpty() || quickPicksRecyclerView == null || quickPicksSection == null) {
+            Log.d(TAG, "Hiding quick picks - picks: " + (picks == null ? "null" : picks.size()) + 
+                  ", recyclerView: " + (quickPicksRecyclerView == null ? "null" : "exists") +
+                  ", section: " + (quickPicksSection == null ? "null" : "exists"));
+            if (quickPicksSection != null) {
+                quickPicksSection.setVisibility(View.GONE);
             }
             return;
         }
         
         Log.d(TAG, "Showing quick picks with " + picks.size() + " items");
+        quickPicksSection.setVisibility(View.VISIBLE);
         quickPicksRecyclerView.setVisibility(View.VISIBLE);
         
-        music.resona.adapters.QuickPicksAdapter quickPicksAdapter = 
-            new music.resona.adapters.QuickPicksAdapter(requireContext(), picks);
-        quickPicksRecyclerView.setAdapter(quickPicksAdapter);
-        Log.d(TAG, "Quick picks adapter set");
-    }
-
-
-
-    /**
-     * Handles loading state updates.
-     * 
-     * @param isLoading the current loading state
-     */
-    private void handleLoadingStateUpdate(@Nullable Boolean isLoading) {
-        Log.d(TAG, "Loading state: " + isLoading);
+        // Prefetch for instant playback
+        SongPrefetchHelper.getInstance().prefetchFromHomeFeed(picks, 5);
         
-        if (skeletonLoader != null) {
-            skeletonLoader.setVisibility(Boolean.TRUE.equals(isLoading) ? View.VISIBLE : View.GONE);
+        // Update existing adapter or create new one if needed
+        if (quickPicksAdapter == null) {
+            Log.d(TAG, "Creating new QuickPicksAdapter with " + picks.size() + " items");
+            quickPicksAdapter = new QuickPicksAdapter(requireContext(), picks);
+            quickPicksRecyclerView.setAdapter(quickPicksAdapter);
+        } else {
+            Log.d(TAG, "Updating existing QuickPicksAdapter from " + quickPicksAdapter.getItemCount() + " to " + picks.size() + " items");
+            quickPicksAdapter.updateItems(picks);
+        }
+        
+        // Force layout update
+        quickPicksRecyclerView.post(() -> {
+            Log.d(TAG, "QuickPicks RecyclerView - Visibility: " + 
+                  (quickPicksRecyclerView.getVisibility() == View.VISIBLE ? "VISIBLE" : "GONE") +
+                  ", Height: " + quickPicksRecyclerView.getHeight() +
+                  ", Adapter items: " + (quickPicksAdapter != null ? quickPicksAdapter.getItemCount() : "null"));
+        });
+    }
+    
+    private void handleLoadingStateUpdate(@NonNull HomeFeedViewModel.LoadingState state) {
+        Log.d(TAG, "Loading state: " + state);
+        
+        switch (state) {
+            case INITIAL_LOAD:
+            case REFRESHING:
+                // Show skeleton only for initial load
+                if (sectionsAdapter == null || sectionsAdapter.getItemCount() == 0) {
+                    skeletonLoader.setVisibility(View.VISIBLE);
+                }
+                paginationLoader.setVisibility(View.GONE);
+                break;
+                
+            case PAGINATING:
+                // Show pagination loader at bottom
+                skeletonLoader.setVisibility(View.GONE);
+                paginationLoader.setVisibility(View.VISIBLE);
+                // Ensure it's above navigation
+                paginationLoader.setElevation(16);
+                paginationLoader.bringToFront();
+                break;
+                
+            case IDLE:
+                // Hide all loaders
+                skeletonLoader.setVisibility(View.GONE);
+                paginationLoader.setVisibility(View.GONE);
+                break;
         }
     }
     
-    /**
-     * Handles error message updates.
-     * 
-     * @param error the error message, or null if no error
-     */
     private void handleErrorUpdate(@Nullable String error) {
         if (error != null && !error.isEmpty()) {
             Toast.makeText(requireContext(), error, Toast.LENGTH_SHORT).show();
         }
     }
     
-    /**
-     * Loads home data immediately using cached visitor data or authentication.
-     */
-    private void loadHomeData() {
-        Log.d(TAG, "Loading home data...");
-        Log.d(TAG, "Visitor data ready: " + App.isVisitorDataReady());
+    private void updateHeader(@Nullable String displayName, @Nullable String avatarUrl, boolean authenticated) {
+        if (usernameTextView != null) {
+            String fallback = authenticated ? "User" : "Guest";
+            usernameTextView.setText(displayName != null && !displayName.isEmpty() ? displayName : fallback);
+        }
         
-        if (!App.isVisitorDataReady()) {
-            Log.d(TAG, "Visitor data not ready yet, retrying in 1 second...");
-            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
-                @Override
-                public void run() {
-                    loadHomeData(); // Retry
-                }
-            }, 1000);
+        if (profileImageView != null) {
+            if (avatarUrl != null && !avatarUrl.isEmpty()) {
+                Glide.with(this)
+                    .load(avatarUrl)
+                    .circleCrop()
+                    .diskCacheStrategy(DiskCacheStrategy.ALL)
+                    .placeholder(R.drawable.memefi)
+                    .error(R.drawable.memefi)
+                    .into(profileImageView);
+            } else {
+                profileImageView.setImageResource(R.drawable.customer);
+            }
+        }
+    }
+    
+    private void loadInitialData() {
+        if (isLoadingInitialData) {
+            Log.d(TAG, "Already loading initial data");
             return;
         }
         
+        Log.d(TAG, "Loading initial data");
+        viewModel.setContext(requireContext());
+        
+        if (!App.isVisitorDataReady()) {
+            Log.d(TAG, "Visitor data not ready, retrying in " + DATA_LOAD_RETRY_MS + "ms");
+            new Handler(Looper.getMainLooper()).postDelayed(this::loadInitialData, DATA_LOAD_RETRY_MS);
+            return;
+        }
+        
+        isLoadingInitialData = true;
         viewModel.loadHomeData();
+    }
+    
+    @Override
+    public void onDestroyView() {
+        super.onDestroyView();
+        
+        // Save scroll position before destroying view
+        if (scrollView != null) {
+            savedScrollPosition = scrollView.getScrollY();
+        }
+        
+        // Clear references to prevent memory leaks but keep state flags
+        // previousSectionCount is kept to track pagination
+        // hasLoadedData is kept to prevent reload on tab switch
+        scrollView = null;
+        sectionsRecyclerView = null;
+        quickPicksRecyclerView = null;
+        skeletonLoader = null;
+        paginationLoader = null;
+        chipGroup = null;
+        profileImageView = null;
+        greetingTextView = null;
+        usernameTextView = null;
+        sectionsAdapter = null;
+        quickPicksAdapter = null;
     }
 }

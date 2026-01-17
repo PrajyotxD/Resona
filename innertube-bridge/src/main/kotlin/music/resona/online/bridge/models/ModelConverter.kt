@@ -152,10 +152,71 @@ object ModelConverter {
     /**
      * Basic conversion for artist page - will be enhanced when we examine ArtistPage structure.
      */
-    fun convertArtistBasic(artist: YTItem, songs: List<YTItem> = emptyList()): ArtistPageResult {
+    fun convertArtistBasic(artist: YTItem, sections: List<com.metrolist.innertube.pages.ArtistSection>, description: String? = null): ArtistPageResult {
+        // Categorize items by section title
+        val songs = mutableListOf<YTItem>()
+        val albums = mutableListOf<YTItem>()
+        val singles = mutableListOf<YTItem>()
+        val videos = mutableListOf<YTItem>()
+        
+        for (section in sections) {
+            val titleLower = section.title.lowercase()
+            when {
+                // Songs section
+                titleLower.contains("song") || 
+                titleLower.contains("track") ||
+                titleLower == "" && section.items.firstOrNull() is com.metrolist.innertube.models.SongItem -> {
+                    songs.addAll(section.items)
+                }
+                // Singles & EPs section
+                titleLower.contains("single") || 
+                titleLower.contains("ep") -> {
+                    singles.addAll(section.items)
+                }
+                // Albums section (excluding singles)
+                titleLower.contains("album") -> {
+                    albums.addAll(section.items)
+                }
+                // Videos section
+                titleLower.contains("video") || 
+                titleLower.contains("mv") ||
+                titleLower.contains("music video") -> {
+                    videos.addAll(section.items)
+                }
+                // Featured on / Appears on - treat as albums
+                titleLower.contains("featured") ||
+                titleLower.contains("appears on") -> {
+                    albums.addAll(section.items)
+                }
+                // Playlists - could be songs or albums
+                titleLower.contains("playlist") -> {
+                    // Add to songs for now
+                    songs.addAll(section.items)
+                }
+                // Unknown sections - categorize by item type
+                else -> {
+                    for (item in section.items) {
+                        when (item) {
+                            is com.metrolist.innertube.models.SongItem -> songs.add(item)
+                            is com.metrolist.innertube.models.AlbumItem -> albums.add(item)
+                            is com.metrolist.innertube.models.PlaylistItem -> songs.add(item)
+                            else -> songs.add(item)
+                        }
+                    }
+                }
+            }
+        }
+        
         return ArtistPageResult(
             artist = convertYTItem(artist),
-            songs = convertYTItems(songs)
+            description = description,
+            thumbnails = artist.thumbnail?.let { listOf(it) } ?: emptyList(),
+            shuffleEndpoint = (artist as? com.metrolist.innertube.models.ArtistItem)?.shuffleEndpoint?.playlistId,
+            radioEndpoint = (artist as? com.metrolist.innertube.models.ArtistItem)?.radioEndpoint?.playlistId,
+            songs = convertYTItems(songs),
+            albums = convertYTItems(albums),
+            singles = convertYTItems(singles),
+            videos = convertYTItems(videos)
         )
     }
     

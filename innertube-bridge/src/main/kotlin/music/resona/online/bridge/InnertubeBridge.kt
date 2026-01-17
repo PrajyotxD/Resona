@@ -594,9 +594,7 @@ object InnertubeBridge {
         return ExceptionConverter.convertExceptions {
             runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
                 val result = YouTube.artist(browseId).getOrThrow()
-                // Extract songs from the first section that contains songs
-                val songs = result.sections.flatMap { it.items }.filterIsInstance<com.metrolist.innertube.models.SongItem>()
-                ModelConverter.convertArtistBasic(result.artist, songs)
+                ModelConverter.convertArtistBasic(result.artist, result.sections, result.description)
             }
         }
     }
@@ -1057,6 +1055,82 @@ object InnertubeBridge {
     }
     
     /**
+     * Gets the explore page synchronously with ExplorePageResult.
+     * Executes on background thread to avoid blocking the main thread.
+     */
+    @JvmStatic
+    fun getExplorePage(): music.resona.online.bridge.models.ExplorePageResult {
+        return ExceptionConverter.convertExceptions {
+            runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
+                val result = YouTube.explore().getOrThrow()
+                music.resona.online.bridge.models.ExplorePageResult(
+                    sections = listOf(
+                        music.resona.online.bridge.models.HomeSectionResult(
+                            title = "New Release Albums",
+                            items = ModelConverter.convertYTItems(result.newReleaseAlbums)
+                        ),
+                        music.resona.online.bridge.models.HomeSectionResult(
+                            title = "Mood & Genres",
+                            items = result.moodAndGenres.map { moodGenre ->
+                                music.resona.online.bridge.models.YTItemResult(
+                                    id = moodGenre.endpoint?.browseId ?: "",
+                                    title = moodGenre.title,
+                                    thumbnail = "",
+                                    type = "genre"
+                                )
+                            }
+                        )
+                    )
+                )
+            }
+        }
+    }
+    
+    /**
+     * Gets next page with continuation token synchronously.
+     * Executes on background thread to avoid blocking the main thread.
+     */
+    @JvmStatic
+    fun getNextPage(continuation: String): music.resona.online.bridge.models.NextPageResult {
+        return ExceptionConverter.convertExceptions {
+            runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = null,
+                    playlistId = null,
+                    playlistSetVideoId = null,
+                    index = null,
+                    params = null
+                )
+                val result = YouTube.next(endpoint, continuation).getOrThrow()
+                music.resona.online.bridge.models.NextPageResult(
+                    items = result.items.map { item ->
+                        music.resona.online.bridge.models.YTItemResult(
+                            id = item.id,
+                            title = item.title,
+                            thumbnail = item.thumbnail,
+                            type = "song",
+                            artists = item.artists.map { artist ->
+                                music.resona.online.bridge.models.ArtistResult(
+                                    id = artist.id ?: "",
+                                    name = artist.name
+                                )
+                            },
+                            album = item.album?.let {
+                                music.resona.online.bridge.models.AlbumResult(
+                                    id = it.id,
+                                    name = it.name
+                                )
+                            },
+                            duration = item.duration
+                        )
+                    },
+                    continuation = result.continuation
+                )
+            }
+        }
+    }
+    
+    /**
      * Gets charts data synchronously.
      * Executes on background thread to avoid blocking the main thread.
      */
@@ -1209,6 +1283,53 @@ object InnertubeBridge {
                     playlistId = playlistId
                 )
                 val result = YouTube.next(endpoint).getOrThrow()
+                ModelConverter.convertSearchResults(result.items)
+            }
+        }
+    }
+    
+    /**
+     * Gets radio/automix queue for a video synchronously.
+     * This generates a continuous mix of similar songs based on the seed video.
+     * Perfect for creating endless playback queues.
+     * 
+     * @param videoId The seed video ID to generate radio from
+     * @param playlistId Optional playlist context for better recommendations
+     * @return SearchResult containing the generated radio queue
+     */
+    @JvmStatic
+    fun getRadioQueueSync(videoId: String, playlistId: String?): SearchResult {
+        return ExceptionConverter.convertExceptions {
+            runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = videoId,
+                    playlistId = playlistId,
+                    params = "wAEB" // Radio/automix parameter
+                )
+                val result = YouTube.next(endpoint).getOrThrow()
+                ModelConverter.convertSearchResults(result.items)
+            }
+        }
+    }
+    
+    /**
+     * Gets continuation of radio/next queue synchronously.
+     * Use this to load more songs when approaching the end of the queue.
+     * 
+     * @param videoId Current video ID
+     * @param playlistId Optional playlist ID
+     * @param continuation Continuation token from previous getRadioQueue or getNextSongs call
+     * @return SearchResult containing additional songs
+     */
+    @JvmStatic
+    fun getQueueContinuationSync(videoId: String, playlistId: String?, continuation: String): SearchResult {
+        return ExceptionConverter.convertExceptions {
+            runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = videoId,
+                    playlistId = playlistId
+                )
+                val result = YouTube.next(endpoint, continuation).getOrThrow()
                 ModelConverter.convertSearchResults(result.items)
             }
         }
@@ -1815,8 +1936,7 @@ object InnertubeBridge {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val result = YouTube.artist(browseId).getOrThrow()
-                val songs = result.sections.flatMap { it.items }.filterIsInstance<com.metrolist.innertube.models.SongItem>()
-                val bridgeResult = ModelConverter.convertArtistBasic(result.artist, songs)
+                val bridgeResult = ModelConverter.convertArtistBasic(result.artist, result.sections, result.description)
                 
                 CoroutineScope(Dispatchers.Main).launch {
                     callback.onSuccess(bridgeResult)
@@ -2467,6 +2587,103 @@ object InnertubeBridge {
         }
     }
     
+    /**
+     * Gets the explore page asynchronously with ExplorePageCallback.
+     * Executes on background thread and delivers callbacks on main thread.
+     */
+    @JvmStatic
+    fun getExploreAsync(callback: ExplorePageCallback) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val result = YouTube.explore().getOrThrow()
+                val bridgeResult = music.resona.online.bridge.models.ExplorePageResult(
+                    sections = listOf(
+                        music.resona.online.bridge.models.HomeSectionResult(
+                            title = "New Release Albums",
+                            items = ModelConverter.convertYTItems(result.newReleaseAlbums)
+                        ),
+                        music.resona.online.bridge.models.HomeSectionResult(
+                            title = "Mood & Genres",
+                            items = result.moodAndGenres.map { moodGenre ->
+                                music.resona.online.bridge.models.YTItemResult(
+                                    id = moodGenre.endpoint?.browseId ?: "",
+                                    title = moodGenre.title,
+                                    thumbnail = "",
+                                    type = "genre"
+                                )
+                            }
+                        )
+                    )
+                )
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onSuccess(bridgeResult)
+                }
+            } catch (throwable: Throwable) {
+                val bridgeException = ExceptionConverter.convertToBridgeException(throwable)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onError(bridgeException)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Gets next page with continuation token asynchronously.
+     * Executes on background thread and delivers callbacks on main thread.
+     */
+    @JvmStatic
+    fun getNextAsync(continuation: String, callback: NextPageCallback) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                // Call innertube with continuation and empty endpoint
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = null,
+                    playlistId = null,
+                    playlistSetVideoId = null,
+                    index = null,
+                    params = null
+                )
+                val result = YouTube.next(endpoint, continuation).getOrThrow()
+                val bridgeResult = music.resona.online.bridge.models.NextPageResult(
+                    items = result.items.map { item ->
+                        music.resona.online.bridge.models.YTItemResult(
+                            id = item.id,
+                            title = item.title,
+                            thumbnail = item.thumbnail,
+                            type = "song",
+                            artists = item.artists.map { artist ->
+                                music.resona.online.bridge.models.ArtistResult(
+                                    id = artist.id ?: "",
+                                    name = artist.name
+                                )
+                            },
+                            album = item.album?.let {
+                                music.resona.online.bridge.models.AlbumResult(
+                                    id = it.id,
+                                    name = it.name
+                                )
+                            },
+                            duration = item.duration
+                        )
+                    },
+                    continuation = result.continuation
+                )
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onSuccess(bridgeResult)
+                }
+            } catch (throwable: Throwable) {
+                val bridgeException = ExceptionConverter.convertToBridgeException(throwable)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onError(bridgeException)
+                }
+            }
+        }
+    }
+    
     // ========== ASYNCHRONOUS ADVANCED FUNCTIONALITY ==========
     
     /**
@@ -2597,6 +2814,75 @@ object InnertubeBridge {
                     playlistId = playlistId
                 )
                 val result = YouTube.next(endpoint).getOrThrow()
+                val bridgeResult = ModelConverter.convertSearchResults(result.items)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onSuccess(bridgeResult)
+                }
+            } catch (throwable: Throwable) {
+                val bridgeException = ExceptionConverter.convertToBridgeException(throwable)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onError(bridgeException)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Gets radio/automix queue for a video asynchronously.
+     * This generates a continuous mix of similar songs based on the seed video.
+     * Perfect for creating endless playback queues.
+     * Executes on background thread and delivers callbacks on main thread.
+     * 
+     * @param videoId The seed video ID to generate radio from
+     * @param playlistId Optional playlist context for better recommendations
+     * @param callback Callback to receive the radio queue result
+     */
+    @JvmStatic
+    fun getRadioQueueAsync(videoId: String, playlistId: String?, callback: SearchCallback) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = videoId,
+                    playlistId = playlistId,
+                    params = "wAEB" // Radio/automix parameter
+                )
+                val result = YouTube.next(endpoint).getOrThrow()
+                val bridgeResult = ModelConverter.convertSearchResults(result.items)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onSuccess(bridgeResult)
+                }
+            } catch (throwable: Throwable) {
+                val bridgeException = ExceptionConverter.convertToBridgeException(throwable)
+                
+                CoroutineScope(Dispatchers.Main).launch {
+                    callback.onError(bridgeException)
+                }
+            }
+        }
+    }
+    
+    /**
+     * Gets continuation of radio/next queue asynchronously.
+     * Use this to load more songs when approaching the end of the queue.
+     * Executes on background thread and delivers callbacks on main thread.
+     * 
+     * @param videoId Current video ID
+     * @param playlistId Optional playlist ID
+     * @param continuation Continuation token from previous call
+     * @param callback Callback to receive additional songs
+     */
+    @JvmStatic
+    fun getQueueContinuationAsync(videoId: String, playlistId: String?, continuation: String, callback: SearchCallback) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                val endpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = videoId,
+                    playlistId = playlistId
+                )
+                val result = YouTube.next(endpoint, continuation).getOrThrow()
                 val bridgeResult = ModelConverter.convertSearchResults(result.items)
                 
                 CoroutineScope(Dispatchers.Main).launch {

@@ -1,6 +1,7 @@
 package music.resona.adapters;
 
 import android.content.Context;
+import android.content.Intent;
 import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -18,7 +19,11 @@ import com.bumptech.glide.Glide;
 import java.util.List;
 import java.util.Locale;
 
+import music.resona.MainActivity;
 import music.resona.R;
+import music.resona.activity.Vibe;
+import music.resona.cache.StreamCache;
+import music.resona.models.Song;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -68,7 +73,17 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         holder.tvTitle.setText(item.getTitle());
         holder.tvSubtitle.setText(buildSubtitle(item));
         loadThumbnail(holder.ivThumbnail, item.getThumbnail());
-        setupItemClickListener(holder.itemView, item);
+        
+        // Set unique transition name for shared element animation
+        String transitionName = "thumbnail_" + item.getId() + "_" + position;
+        holder.ivThumbnail.setTransitionName(transitionName);
+        
+        setupItemClickListener(holder.itemView, holder.ivThumbnail, item, transitionName);
+        
+        // Prefetch stream URL for instant playback (non-blocking)
+        if (ITEM_TYPE_SONG.equals(item.getType()) && item.getId() != null) {
+            StreamCache.getInstance().prefetch(item.getId());
+        }
         
         // Apply typefaces
         music.resona.utils.UiUXUtil.typeface(context, holder.tvTitle, "akatski.ttf", android.graphics.Typeface.BOLD);
@@ -191,41 +206,115 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
      * Sets up click listener for item interactions.
      * 
      * @param itemView the item view
+     * @param imageView the thumbnail ImageView for transition
      * @param item the item data
+     * @param transitionName the unique transition name
      */
-    private void setupItemClickListener(@NonNull View itemView, @NonNull YTItemResult item) {
-        itemView.setOnClickListener(v -> handleItemClick(item));
+    private void setupItemClickListener(@NonNull View itemView, @NonNull ImageView imageView, 
+                                       @NonNull YTItemResult item, @NonNull String transitionName) {
+        itemView.setOnClickListener(v -> handleItemClick(imageView, item, transitionName));
     }
     
     /**
      * Handles item click events.
      * 
+     * @param imageView the thumbnail ImageView for transition
      * @param item the clicked item
+     * @param transitionName the transition name for shared element
      */
-    private void handleItemClick(@NonNull YTItemResult item) {
+    private void handleItemClick(@NonNull ImageView imageView, @NonNull YTItemResult item, 
+                                @NonNull String transitionName) {
         Log.d(TAG, "Clicked: " + item.getTitle() + " (Type: " + item.getType() + ")");
         
-        String message = buildClickMessage(item);
-        Toast.makeText(context, message, Toast.LENGTH_SHORT).show();
+        String type = item.getType();
         
-        // TODO: Implement type-specific navigation
-        // - Songs: Start playback
-        // - Albums: Open album page
-        // - Artists: Open artist page
-        // - Playlists: Open playlist page
+        // For albums and playlists - open Vibe activity with transition
+        if (ITEM_TYPE_ALBUM.equals(type) || ITEM_TYPE_PLAYLIST.equals(type)) {
+            openVibeActivity(imageView, item, transitionName);
+        } else if (ITEM_TYPE_SONG.equals(type)) {
+            // Play the song directly
+            playSong(item);
+        } else if (ITEM_TYPE_ARTIST.equals(type)) {
+            // TODO: Open artist page
+            Toast.makeText(context, "Artist page: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        } else {
+            // For other types, show a toast for now
+            Toast.makeText(context, "Item: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        }
     }
     
     /**
-     * Builds the click message for toast display.
+     * Plays a song item by converting it to Song model and calling MainActivity.
      * 
-     * @param item the clicked item
-     * @return the formatted message
+     * @param item the song item to play
      */
-    @NonNull
-    private String buildClickMessage(@NonNull YTItemResult item) {
-        return item.getTitle() + "\n" + 
-               "Type: " + item.getType() + "\n" +
-               "ID: " + item.getId();
+    private void playSong(@NonNull YTItemResult item) {
+        String videoId = item.getId();
+        if (videoId == null || videoId.isEmpty()) {
+            Toast.makeText(context, "Cannot play: No video ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String artistName = getFirstArtistName(item);
+        Integer duration = item.getDuration();
+        
+        Song song = new Song(
+            videoId,
+            item.getTitle(),
+            artistName,
+            null, // album
+            item.getThumbnail(),
+            duration != null ? duration : 0
+        );
+        
+        // Play through MainActivity
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).playSong(song);
+        } else {
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        }
+    }
+    
+    /**
+     * Opens the Vibe activity for albums, playlists, and singles with shared element transition.
+     * 
+     * @param imageView the thumbnail ImageView for transition
+     * @param item the item to display
+     * @param transitionName the transition name
+     */
+    private void openVibeActivity(@NonNull ImageView imageView, @NonNull YTItemResult item, 
+                                 @NonNull String transitionName) {
+        Intent intent = new Intent(context, Vibe.class);
+        
+        // Determine browseId - use browseId for albums/artists, playlistId for playlists
+        String browseId = item.getBrowseId();
+        if (browseId == null && item.getPlaylistId() != null) {
+            browseId = item.getPlaylistId();
+        }
+        if (browseId == null) {
+            browseId = item.getId();
+        }
+        
+        // Build subtitle
+        String subtitle = buildSubtitle(item);
+        
+        intent.putExtra("browseId", browseId);
+        intent.putExtra("title", item.getTitle());
+        intent.putExtra("subtitle", subtitle);
+        intent.putExtra("thumbnailUrl", item.getThumbnail());
+        intent.putExtra("transitionName", transitionName);
+        
+        if (context instanceof android.app.Activity) {
+            android.app.Activity activity = (android.app.Activity) context;
+            android.os.Bundle options = android.app.ActivityOptions
+                .makeSceneTransitionAnimation(activity, imageView, transitionName)
+                .toBundle();
+            context.startActivity(intent, options);
+        } else {
+            context.startActivity(intent);
+        }
+        
+        Log.d(TAG, "Opening Vibe activity for: " + item.getTitle() + " (browseId: " + browseId + ")");
     }
 
     /**

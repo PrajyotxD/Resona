@@ -4,4 +4,49 @@
     <color name="colorAccent">#0B0B10</color>
     <color name="colorControlHighlight">#0B0B10</color>
     <color name="colorControlNormal">#0B0B10</color>
+    
+    <!-- Text colors -->
+    <color name="text_primary">#FFFFFF</color>
+    <color name="text_secondary">#B3B3B3</color>
+    <color name="text_disabled">#666666</color>
+    <color name="text_tertiary">#888888</color>
+    
+    <!-- Background colors -->
+    <color name="background_primary">#121212</color>
+    <color name="surface_variant">#282828</color>
+    <color name="search_input_background">#242424</color>
+    <color name="chip_background">#2A2A2A</color>
+    
+    <!-- Accent colors -->
+    <color name="spotify_green">#1DB954</color>
+    
+    <!-- Share Card colors -->
+    <color name="card_overlay">#80000000</color>
+    <color name="white_60">#99FFFFFF</color>
+    
+    <!-- Gradient 1 - Purple/Pink -->
+    <color name="gradient_1_start">#667EEA</color>
+    <color name="gradient_1_center">#764BA2</color>
+    <color name="gradient_1_end">#F093FB</color>
+    
+    <!-- Gradient 2 - Orange/Red -->
+    <color name="gradient_2_start">#F46B45</color>
+    <color name="gradient_2_center">#EEA849</color>
+    <color name="gradient_2_end">#FCA5F1</color>
+    
+    <!-- Gradient 3 - Blue/Teal -->
+    <color name="gradient_3_start">#4FACFE</color>
+    <color name="gradient_3_center">#00F2FE</color>
+    <color name="gradient_3_end">#43E97B</color>
+    
+    <!-- Gradient 4 - Purple/Blue -->
+    <color name="gradient_4_start">#A8EDEA</color>
+    <color name="gradient_4_center">#FED6E3</color>
+    <color name="gradient_4_end">#D299C2</color>
+    
+    <!-- Gradient 5 - Sunset -->
+    <color name="gradient_5_start">#FA709A</color>
+    <color name="gradient_5_center">#FEE140</color>
+    <color name="gradient_5_end">#30CFD0</color>
+    
 </resources>

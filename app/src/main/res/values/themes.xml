@@ -3,6 +3,17 @@
     <style name="Base.Theme.Resona" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your light theme here. -->
         <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+        
+        <!-- Enable window content transitions -->
+        <item name="android:windowContentTransitions">true</item>
+        
+        <!-- Shared element transitions -->
+        <item name="android:windowSharedElementEnterTransition">@transition/shared_image_transition</item>
+        <item name="android:windowSharedElementExitTransition">@transition/shared_image_transition</item>
+        
+        <!-- Regular transitions -->
+        <item name="android:windowEnterTransition">@transition/fade_in</item>
+        <item name="android:windowExitTransition">@transition/fade_out</item>
     </style>
 
     <style name="Theme.Resona" parent="Base.Theme.Resona" />

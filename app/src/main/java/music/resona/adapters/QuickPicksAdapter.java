@@ -17,7 +17,9 @@ import com.bumptech.glide.Glide;
 
 import java.util.List;
 
+import music.resona.MainActivity;
 import music.resona.R;
+import music.resona.models.Song;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -30,10 +32,42 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
     private static final String TAG = "QuickPicksAdapter";
     private final Context context;
     private final List<YTItemResult> quickPicks;
+    private long lastClickTime = 0;
+    private static final long CLICK_DEBOUNCE_MS = 1000; // 1 second debounce
 
     public QuickPicksAdapter(@NonNull Context context, @NonNull List<YTItemResult> quickPicks) {
         this.context = context;
         this.quickPicks = quickPicks;
+    }
+
+    /**
+     * Update the adapter with new items without resetting scroll position.
+     * Efficiently notifies only the newly added items.
+     */
+    public void updateItems(@NonNull List<YTItemResult> newItems) {
+        if (newItems.isEmpty()) {
+            Log.d(TAG, "No new items to update");
+            return;
+        }
+        
+        int oldSize = quickPicks.size();
+        quickPicks.clear();
+        quickPicks.addAll(newItems);
+        int newSize = quickPicks.size();
+        
+        if (oldSize == 0) {
+            // First load: notify entire dataset
+            notifyDataSetChanged();
+            Log.d(TAG, "Initial load: " + newSize + " items");
+        } else if (newSize > oldSize) {
+            // Items added: notify only new items to preserve scroll position
+            notifyItemRangeInserted(oldSize, newSize - oldSize);
+            Log.d(TAG, "Added " + (newSize - oldSize) + " new items, total now: " + newSize);
+        } else {
+            // Size changed in other way: full refresh
+            notifyDataSetChanged();
+            Log.d(TAG, "Dataset changed: " + newSize + " items");
+        }
     }
 
     @NonNull
@@ -48,9 +82,14 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
         YTItemResult item = quickPicks.get(position);
 
         holder.tvTitle.setText(item.getTitle());
-        
-        String artist = getArtistName(item);
-        holder.tvArtist.setText(artist != null ? artist : "Unknown Artist");
+
+        // Set artist name
+        String artistName = getArtistName(item);
+        if (artistName != null && !artistName.isEmpty()) {
+            holder.tvArtist.setText(artistName);
+        } else {
+            holder.tvArtist.setText("Unknown Artist");
+        }
 
         // Load thumbnail
         if (item.getThumbnail() != null && !item.getThumbnail().isEmpty()) {
@@ -64,12 +103,9 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
             holder.ivThumbnail.setImageResource(R.drawable.memefi);
         }
 
-        // Apply typefaces
-        UiUXUtil.typeface(context, holder.tvTitle, "akatski.ttf", android.graphics.Typeface.BOLD);
-        UiUXUtil.typeface(context, holder.tvArtist, "copy.ttf", android.graphics.Typeface.NORMAL);
-
-        // Apply rounded corners
-        UiUXUtil.setRoundedImage(holder.ivThumbnail, 12);
+        // Apply typefaces using UIUXUtil
+        UiUXUtil.typeface(context, holder.tvTitle, "akatski.ttf", android.graphics.Typeface.NORMAL);
+        UiUXUtil.typeface(context, holder.tvArtist, "medium.ttf", android.graphics.Typeface.NORMAL);
 
         // Click listener
         holder.itemView.setOnClickListener(v -> handleItemClick(item));
@@ -88,9 +124,40 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
     }
 
     private void handleItemClick(YTItemResult item) {
+        // Debounce to prevent double clicks
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastClickTime < CLICK_DEBOUNCE_MS) {
+            Log.d(TAG, "Click ignored (debounce)");
+            return;
+        }
+        lastClickTime = currentTime;
+        
         Log.d(TAG, "Quick pick clicked: " + item.getTitle());
-        Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
-        // TODO: Implement playback
+        
+        String videoId = item.getId();
+        if (videoId == null || videoId.isEmpty()) {
+            Toast.makeText(context, "Cannot play: No video ID", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        String artistName = getArtistName(item);
+        Integer duration = item.getDuration();
+        
+        Song song = new Song(
+            videoId,
+            item.getTitle(),
+            artistName,
+            null, // album
+            item.getThumbnail(),
+            duration != null ? duration : 0
+        );
+        
+        // Play radio mode for continuous playback (auto-queues similar songs)
+        if (context instanceof MainActivity) {
+            ((MainActivity) context).playRadio(song);
+        } else {
+            Toast.makeText(context, "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
+        }
     }
 
     static class QuickPickViewHolder extends RecyclerView.ViewHolder {

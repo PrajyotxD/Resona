@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <!-- Section Title Skeleton -->
+    <View
+        android:layout_width="160dp"
+        android:layout_height="20dp"
+        android:layout_marginBottom="12dp"
+        android:background="@drawable/skeleton_rect" />
+
+    <!-- Horizontal Items Skeleton -->
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:scrollbars="none">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+
+            <!-- Item 1 -->
+            <LinearLayout
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:orientation="vertical">
+
+                <View
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@drawable/skeleton_rect_rounded" />
+
+                <View
+                    android:layout_width="120dp"
+                    android:layout_height="14dp"
+                    android:layout_marginBottom="4dp"
+                    android:background="@drawable/skeleton_rect" />
+
+                <View
+                    android:layout_width="90dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/skeleton_rect" />
+            </LinearLayout>
+
+            <!-- Item 2 -->
+            <LinearLayout
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:orientation="vertical">
+
+                <View
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@drawable/skeleton_rect_rounded" />
+
+                <View
+                    android:layout_width="110dp"
+                    android:layout_height="14dp"
+                    android:layout_marginBottom="4dp"
+                    android:background="@drawable/skeleton_rect" />
+
+                <View
+                    android:layout_width="85dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/skeleton_rect" />
+            </LinearLayout>
+
+            <!-- Item 3 -->
+            <LinearLayout
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="12dp"
+                android:orientation="vertical">
+
+                <View
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@drawable/skeleton_rect_rounded" />
+
+                <View
+                    android:layout_width="100dp"
+                    android:layout_height="14dp"
+                    android:layout_marginBottom="4dp"
+                    android:background="@drawable/skeleton_rect" />
+
+                <View
+                    android:layout_width="95dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/skeleton_rect" />
+            </LinearLayout>
+
+            <!-- Item 4 -->
+            <LinearLayout
+                android:layout_width="140dp"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <View
+                    android:layout_width="140dp"
+                    android:layout_height="140dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="@drawable/skeleton_rect_rounded" />
+
+                <View
+                    android:layout_width="115dp"
+                    android:layout_height="14dp"
+                    android:layout_marginBottom="4dp"
+                    android:background="@drawable/skeleton_rect" />
+
+                <View
+                    android:layout_width="80dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/skeleton_rect" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </HorizontalScrollView>
+
+</LinearLayout>

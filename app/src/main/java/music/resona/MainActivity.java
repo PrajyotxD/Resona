@@ -1,6 +1,7 @@
 package music.resona;
 
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
 
@@ -8,6 +9,8 @@ import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -15,32 +18,60 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
-import com.google.android.material.bottomnavigation.BottomNavigationView;
+import music.resona.fragment.SearchFragment;
+import xyz.code.navigationbar.NavigationBar;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import music.resona.activity.AuthActivity;
+import music.resona.activity.FullScreenPlayerActivity;
+import music.resona.app.App;
 import music.resona.fragment.HomeFeed;
+import music.resona.manager.MusicPlaybackManager;
+import music.resona.models.Song;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.models.AccountInfoResult;
+import music.resona.service.MusicService;
+import music.resona.ui.NavBarContainer;
+import music.resona.ui.ResonaMiniPlayer;
 import music.resona.utils.UiUXUtil;
 import music.resona.viewmodel.AccountInfoViewModel;
+
+// New comprehensive playback system
+import music.resona.playback.PlaybackManager;
+import music.resona.playback.QueueManager;
+import music.resona.playback.QuickPicksManager;
+import music.resona.playback.PlaybackQueue;
 
 /**
  * Main activity hosting the primary navigation and fragments.
  * 
- * <p>Manages bottom navigation and fragment transactions for the main app screens.</p>
+ * <p>Manages bottom navigation, mini player, and fragment transactions for the main app screens.</p>
  */
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements MusicPlaybackManager.PlaybackListener {
     
     private static final String TAG = "MainActivity";
     private static final String PREFS_NAME = "main_activity_prefs";
     private static final String KEY_CACHED_USERNAME = "cached_username";
     private static final String KEY_CACHED_THUMBNAIL = "cached_thumbnail";
     
-    private BottomNavigationView bottomNavigation;
+    private NavBarContainer navBarContainer;
+    private NavigationBar bottomNavigation;
+    private ResonaMiniPlayer miniPlayer;
+    private MusicPlaybackManager playbackManager;
     private AccountInfoViewModel accountInfoViewModel;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    
+    // New comprehensive playback system
+    private PlaybackManager newPlaybackManager;
+    private QueueManager queueManager;
+    private QuickPicksManager quickPicksManager;
+    
+    // Fragment instances - cached for state retention
+    private HomeFeed homeFeedFragment;
+    private SearchFragment searchFragment;
+    private Fragment currentFragment;
     
     private final ActivityResultLauncher<Intent> authLauncher = registerForActivityResult(
             new ActivityResultContracts.StartActivityForResult(),
@@ -55,16 +86,151 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // Enable shared element transitions
+        getWindow().requestFeature(android.view.Window.FEATURE_CONTENT_TRANSITIONS);
+        
         EdgeToEdge.enable(this);
         setContentView(R.layout.activity_main2);
         
         setupWindowInsets();
-        setupBottomNavigation();
+        setupNavBarContainer();
         accountInfoViewModel = new ViewModelProvider(this).get(AccountInfoViewModel.class);
         updateAuthenticationState();
         
+        // Initialize playback manager
+        playbackManager = MusicPlaybackManager.getInstance(this);
+        playbackManager.addListener(this);
+        
+        // TODO: Integrate new comprehensive playback system with existing MusicPlaybackManager
+        // Temporarily disabled to prevent queue conflicts - two systems were fighting each other
+        // initializeNewPlaybackSystem();
+        
         if (savedInstanceState == null) {
-            loadFragment(HomeFeed.newInstance());
+            // Initialize cached fragments
+            homeFeedFragment = HomeFeed.newInstance();
+            searchFragment = new SearchFragment();
+            
+            // Load home feed as initial fragment
+            getSupportFragmentManager()
+                    .beginTransaction()
+                    .add(R.id.fragment_container, homeFeedFragment, "HOME")
+                    .commit();
+            currentFragment = homeFeedFragment;
+        } else {
+            // Restore cached fragments after configuration change
+            homeFeedFragment = (HomeFeed) getSupportFragmentManager().findFragmentByTag("HOME");
+            searchFragment = (SearchFragment) getSupportFragmentManager().findFragmentByTag("SEARCH");
+            currentFragment = getSupportFragmentManager().findFragmentById(R.id.fragment_container);
+        }
+        
+        // Restore mini player state if song is playing
+        if (playbackManager.hasSong()) {
+            showMiniPlayer(playbackManager.getCurrentSong());
+        }
+    }
+    
+    /**
+     * Initialize the new comprehensive playback system.
+     * Sets up PlaybackManager, QueueManager, and QuickPicksManager.
+     */
+    private void initializeNewPlaybackSystem() {
+        Log.d(TAG, "Initializing new comprehensive playback system");
+        
+        try {
+            // Initialize managers
+            newPlaybackManager = new PlaybackManager(this);
+            queueManager = new QueueManager(this);
+            quickPicksManager = new QuickPicksManager(this);
+            
+            // Set up playback callbacks
+            newPlaybackManager.setPlaybackCallback(new PlaybackManager.PlaybackCallback() {
+                @Override
+                public void onPlaybackStarted() {
+                    Log.d(TAG, "New playback system: Playback started");
+                }
+                
+                @Override
+                public void onAutoSkipToNext() {
+                    Log.d(TAG, "New playback system: Auto-skipping to next track");
+                    // Handle auto-skip
+                    queueManager.getCurrentQueue(new QueueManager.QueueCallback() {
+                        @Override
+                        public void onQueueLoaded(PlaybackQueue queue) {
+                            if (queue != null && queue.size() > 0) {
+                                queueManager.skipToNext();
+                                Song nextSong = queueManager.getCurrentSong();
+                                if (nextSong != null) {
+                                    newPlaybackManager.setPreloadItem(nextSong);
+                                    newPlaybackManager.startPlayback();
+                                }
+                            }
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Failed to get queue for auto-skip: " + error);
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(String message) {
+                    Log.e(TAG, "New playback system error: " + message);
+                }
+            });
+            
+            // Restore queue state
+            queueManager.restoreQueueState();
+            
+            // Preload Quick Picks for instant access
+            quickPicksManager.preloadForColdStart();
+            
+            Log.d(TAG, "New playback system initialized successfully");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize new playback system", e);
+        }
+    }
+    
+    /**
+     * Get the new PlaybackManager instance for use by fragments.
+     */
+    public PlaybackManager getNewPlaybackManager() {
+        return newPlaybackManager;
+    }
+    
+    /**
+     * Get the QueueManager instance for use by fragments.
+     */
+    public QueueManager getQueueManager() {
+        return queueManager;
+    }
+    
+    /**
+     * Get the QuickPicksManager instance for use by fragments.
+     */
+    public QuickPicksManager getQuickPicksManager() {
+        return quickPicksManager;
+    }
+    
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (playbackManager != null) {
+            playbackManager.removeListener(this);
+        }
+        
+        // Clean up new playback system
+        if (newPlaybackManager != null) {
+            newPlaybackManager.release();
+        }
+        if (queueManager != null) {
+            queueManager.saveQueueState();
+        }
+        
+        if (executorService != null && !executorService.isShutdown()) {
+            executorService.shutdown();
         }
     }
 
@@ -145,72 +311,317 @@ public class MainActivity extends AppCompatActivity {
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, 0);
             UiUXUtil.TStatusBar(this);
             
-            bottomNavigation = findViewById(R.id.bottom_navigation);
-            bottomNavigation.setPadding(0, 0, 0, systemBars.bottom);
+            // Update bottom margin for NavBarContainer to account for system bars
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && navBarContainer != null) {
+                android.widget.FrameLayout.LayoutParams params = 
+                    (android.widget.FrameLayout.LayoutParams) navBarContainer.getLayoutParams();
+                params.bottomMargin = systemBars.bottom + dpToPx(16);
+                navBarContainer.setLayoutParams(params);
+            }
             
             return insets;
         });
     }
     
     /**
-     * Configures bottom navigation with item selection handling.
+     * Sets up the NavBarContainer with MiniPlayer and NavigationBar.
      */
-    private void setupBottomNavigation() {
-        bottomNavigation = findViewById(R.id.bottom_navigation);
-        bottomNavigation.setOnItemSelectedListener(this::handleNavigationItemSelected);
-    }
-    
-    /**
-     * Handles bottom navigation item selection.
-     * 
-     * @param item the selected menu item
-     * @return true if the item was handled successfully
-     */
-    private boolean handleNavigationItemSelected(@NonNull android.view.MenuItem item) {
-        Fragment fragment = getFragmentForNavItem(item.getItemId());
-        return fragment != null && loadFragment(fragment);
-    }
-    
-    /**
-     * Returns the appropriate fragment for the given navigation item ID.
-     * 
-     * @param itemId the navigation item ID
-     * @return the corresponding fragment, or null if not found
-     */
-    private Fragment getFragmentForNavItem(int itemId) {
-        if (itemId == R.id.nav_home) {
-            return HomeFeed.newInstance();
-        } else if (itemId == R.id.nav_explore) {
-            // TODO: Create ExploreFragment
-            Log.d(TAG, "Explore fragment not yet implemented");
-            return HomeFeed.newInstance();
-        } else if (itemId == R.id.nav_library) {
-            // TODO: Create LibraryFragment
-            Log.d(TAG, "Library fragment not yet implemented");
-            return HomeFeed.newInstance();
+    @RequiresApi(api = Build.VERSION_CODES.S)
+    private void setupNavBarContainer() {
+        navBarContainer = findViewById(R.id.nav_bar_container);
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            // Create and configure NavigationBar
+            bottomNavigation = new NavigationBar(this);
+            bottomNavigation.setNavBarBackgroundColor(0x00000000); // Transparent - container handles blur
+            bottomNavigation.setActiveBackgroundColor(0xFFFFFFFF); // White indicator
+            bottomNavigation.setInactiveIconColor(0xFFFFFFFF); // White icons
+            bottomNavigation.setActiveIconColor(0xFF000000); // Black active icon
+            bottomNavigation.setCornerRadius(25f); // Pill shape
+            bottomNavigation.setBlurEnabled(false); // Container handles blur
+            bottomNavigation.setAnimationCurve(NavigationBar.AnimationCurve.OVERSHOOT);
+            bottomNavigation.setAnimationDuration(400);
+            
+            // Add tabs with custom icons
+            bottomNavigation
+                .addTab(R.drawable.ic_home, "Home")
+                .addTab(R.drawable.ic_search, "Search")
+                .addTab(R.drawable.ic_library, "Library")
+                .addTab(R.drawable.ic_settings, "Settings")
+                .addTab(R.drawable.ic_plugin, "Plugin");
+
+
+            // Set selection listener
+            bottomNavigation.setOnTabSelectedListener((position, tab) -> {
+                if(position==0){
+                    switchToFragment(homeFeedFragment, "HOME");
+                } else if (position==1) {
+                    switchToFragment(searchFragment, "SEARCH");
+                }
+            });
+            
+            // Set initial tab
+            bottomNavigation.setActiveTab(0);
+            
+            // Create and configure MiniPlayer
+            miniPlayer = new ResonaMiniPlayer(this);
+            miniPlayer.setOnMiniPlayerListener(new ResonaMiniPlayer.OnMiniPlayerListener() {
+                @Override
+                public void onPlayPause() {
+                    if (playbackManager != null) {
+                        playbackManager.togglePlayPause();
+                    }
+                }
+                
+                @Override
+                public void onNext() {
+                    if (playbackManager != null) {
+                        playbackManager.next();
+                    }
+                }
+                
+                @Override
+                public void onMiniPlayerClick() {
+                    openFullScreenPlayer();
+                }
+            });
+            
+            // Configure container
+            navBarContainer.setNavBarBackgroundColor(0x80252525);
+            navBarContainer.setCornerRadius(28f);
+            navBarContainer.setMiniPlayer(miniPlayer);
+            navBarContainer.setNavigationBar(bottomNavigation);
         }
-        return null;
     }
     
     /**
-     * Loads the specified fragment into the fragment container.
-     * 
-     * @param fragment the fragment to load
-     * @return true if the fragment was loaded successfully
+     * Shows the mini player with song info.
      */
-    private boolean loadFragment(@NonNull Fragment fragment) {
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragment_container, fragment)
-                .commit();
-        return true;
+    public void showMiniPlayer(@Nullable Song song) {
+        if (navBarContainer != null && miniPlayer != null) {
+            miniPlayer.setSong(song);
+            if (!navBarContainer.isMiniPlayerVisible()) {
+                navBarContainer.showMiniPlayer();
+            }
+        }
+    }
+    
+    /**
+     * Hides the mini player.
+     */
+    public void hideMiniPlayer() {
+        if (navBarContainer != null) {
+            navBarContainer.hideMiniPlayer();
+        }
+    }
+    
+    /**
+     * Opens the full screen player activity.
+     */
+    private void openFullScreenPlayer() {
+        Intent intent = new Intent(this, FullScreenPlayerActivity.class);
+        startActivity(intent);
+        overridePendingTransition(0, 0); // Custom animation handled in activity
+    }
+    
+    /**
+     * Plays a song and shows the mini player.
+     * Called from adapters when user clicks on a song.
+     */
+    public void playSong(@NonNull Song song) {
+        if (playbackManager != null) {
+            showMiniPlayer(song);
+            miniPlayer.setLoading(true);
+            
+            playbackManager.playSong(song, new MusicPlaybackManager.PlaybackCallback() {
+                @Override
+                public void onSuccess() {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        miniPlayer.setPlaying(true);
+                    });
+                }
+                
+                @Override
+                public void onError(String message) {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        android.widget.Toast.makeText(MainActivity.this, 
+                            "Error: " + message, android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+        }
+    }
+    
+    /**
+     * Play radio/automix from a seed song - automatically queues similar songs for continuous playback.
+     * Use this for home feed clicks to enable endless playback.
+     */
+    public void playRadio(@NonNull Song song) {
+        if (playbackManager != null) {
+            showMiniPlayer(song);
+            miniPlayer.setLoading(true);
+            
+            playbackManager.playRadio(song, new MusicPlaybackManager.PlaybackCallback() {
+                @Override
+                public void onSuccess() {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        miniPlayer.setPlaying(true);
+                    });
+                }
+                
+                @Override
+                public void onError(String message) {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        android.widget.Toast.makeText(MainActivity.this, 
+                            "Error: " + message, android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+        }
+    }
+    
+    /**
+     * Returns the playback manager for fragments to use.
+     */
+    public MusicPlaybackManager getPlaybackManager() {
+        return playbackManager;
+    }
+    
+    // PlaybackListener implementation
+    
+    @Override
+    public void onSongChanged(Song song) {
+        runOnUiThread(() -> {
+            if (miniPlayer != null) {
+                miniPlayer.setSong(song);
+                if (!navBarContainer.isMiniPlayerVisible()) {
+                    showMiniPlayer(song);
+                }
+            }
+        });
     }
     
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        if (executorService != null && !executorService.isShutdown()) {
-            executorService.shutdown();
+    public void onPlaybackStateChanged(boolean isPlaying) {
+        runOnUiThread(() -> {
+            if (miniPlayer != null) {
+                miniPlayer.setPlaying(isPlaying);
+            }
+        });
+    }
+    
+    @Override
+    public void onProgressChanged(int currentMs, int durationMs) {
+        runOnUiThread(() -> {
+            if (miniPlayer != null && durationMs > 0) {
+                float progress = (float) currentMs / durationMs;
+                miniPlayer.setProgress(progress);
+            }
+        });
+    }
+    
+    @Override
+    public void onShuffleChanged(boolean shuffle) {
+        // Not used in mini player
+    }
+    
+    @Override
+    public void onRepeatModeChanged(MusicService.RepeatMode mode) {
+        // Not used in mini player
+    }
+    
+    @Override
+    public void onError(String message) {
+        runOnUiThread(() -> {
+            android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
+        });
+    }
+    
+    @Override
+    public void onLoadingStateChanged(boolean isLoading) {
+        runOnUiThread(() -> {
+            if (miniPlayer != null) {
+                miniPlayer.setLoading(isLoading);
+            }
+        });
+    }
+    
+    @Override
+    public void onQueueChanged() {
+        runOnUiThread(() -> {
+            // Update queue display
+            Log.d(TAG, "Queue changed");
+        });
+    }
+    
+    public void onNeedsStreamUrl(Song song) {
+        // Handled by MusicPlaybackManager
+    }
+    
+    /**
+     * Returns the appropriate fragment for the given navigation position.
+     * 
+     * @param position the navigation tab position
+     * @return the corresponding fragment, or null if not found
+     */
+    private Fragment getFragmentForNavPosition(int position) {
+        switch (position) {
+            case 0: // Home
+                return HomeFeed.newInstance();
+            case 1: // Search
+                Log.d(TAG, "Search fragment not yet implemented");
+                return new  SearchFragment();
+            case 2: // Library
+                Log.d(TAG, "Library fragment not yet implemented");
+                return HomeFeed.newInstance();
+            case 3: // Settings
+                Log.d(TAG, "Settings fragment not yet implemented");
+                return HomeFeed.newInstance();
+            case 4: // Plugin
+                Log.d(TAG, "Plugin fragment not yet implemented");
+                return HomeFeed.newInstance();
+            default:
+                return null;
         }
+    }
+    
+    /**
+     * Converts dp to pixels.
+     */
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
+    }
+    
+    /**
+     * Switches to the specified fragment using show/hide to preserve state.
+     * 
+     * @param fragment the fragment to switch to
+     * @param tag the fragment tag
+     */
+    private void switchToFragment(@NonNull Fragment fragment, @NonNull String tag) {
+        if (currentFragment == fragment) {
+            return; // Already showing this fragment
+        }
+        
+        androidx.fragment.app.FragmentTransaction transaction = getSupportFragmentManager().beginTransaction();
+        
+        // Hide current fragment if exists
+        if (currentFragment != null) {
+            transaction.hide(currentFragment);
+        }
+        
+        // Show or add the target fragment
+        if (fragment.isAdded()) {
+            transaction.show(fragment);
+        } else {
+            transaction.add(R.id.fragment_container, fragment, tag);
+        }
+        
+        transaction.commit();
+        currentFragment = fragment;
     }
 }
