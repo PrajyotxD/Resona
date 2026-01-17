@@ -33,6 +33,8 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.annotation.RequiresApi;
 
+import java.util.List;
+
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.resource.bitmap.RoundedCorners;
 
@@ -40,6 +42,7 @@ import music.resona.R;
 import music.resona.manager.MusicPlaybackManager;
 import music.resona.models.Song;
 import music.resona.service.MusicService;
+import music.resona.ui.QueueBottomSheet;
 import music.resona.utils.UiUXUtil;
 import xyz.code.blur3.DownscaleScrollableNoiseSuppressor;
 
@@ -547,6 +550,7 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
         // Queue
         ImageView queueButton = createIconButton(R.drawable.queue, dp(40));
         queueButton.setAlpha(0.6f);
+        queueButton.setOnClickListener(v -> showQueueBottomSheet());
         additionalRow.addView(queueButton);
         
         // Spacer
@@ -680,11 +684,20 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
         if (song == null) {
             songTitle.setText("Not Playing");
             artistName.setText("Select a song");
+            // Reset seekbar for no song
+            seekBar.setProgress(0);
+            currentTime.setText("0:00");
+            totalTime.setText("0:00");
             return;
         }
         
         songTitle.setText(song.getTitle());
         artistName.setText(song.getArtist() != null ? song.getArtist() : "Unknown Artist");
+        
+        // Reset seekbar immediately when song changes
+        seekBar.setProgress(0);
+        currentTime.setText("0:00");
+        totalTime.setText("--:--"); // Show loading state until duration is available
         
         // Load album art
         String url = song.getThumbnailUrl();
@@ -796,5 +809,80 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
     @Override
     public void onLoadingStateChanged(boolean isLoading) {
         runOnUiThread(() -> updateLoadingState(isLoading));
+    }
+    
+    @Override
+    public void onQueueChanged() {
+        runOnUiThread(() -> {
+            // Update queue display if needed
+            android.util.Log.d("FullScreenPlayerActivity", "Queue changed");
+        });
+    }
+    
+    public void onNeedsStreamUrl(Song song) {
+        // Handled by MusicPlaybackManager
+    }
+    
+    /**
+     * Show bottom sheet with current queue.
+     */
+    private void showQueueBottomSheet() {
+        if (playbackManager == null) return;
+        
+        List<Song> queueSongs = playbackManager.getQueue();
+        int currentIndex = playbackManager.getCurrentQueueIndex();
+        
+        android.util.Log.d(TAG, "showQueueBottomSheet - Queue size: " + queueSongs.size() + ", Current index: " + currentIndex);
+        
+        if (queueSongs.isEmpty()) {
+            Toast.makeText(this, "Queue is empty", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        // Create an array to hold the bottom sheet reference for use in callbacks
+        final QueueBottomSheet[] sheetHolder = new QueueBottomSheet[1];
+        
+        QueueBottomSheet queueSheet = new QueueBottomSheet(
+            this,
+            queueSongs,
+            currentIndex,
+            new QueueBottomSheet.OnQueueItemClickListener() {
+                @Override
+                public void onSongClick(int position) {
+                    // Jump to selected song
+                    if (playbackManager != null) {
+                        playbackManager.skipToPosition(position);
+                    }
+                    // Optionally dismiss the sheet after selection
+                    // if (sheetHolder[0] != null) sheetHolder[0].dismiss();
+                }
+                
+                @Override
+                public void onRemoveClick(int position) {
+                    // Remove song from queue
+                    if (playbackManager != null) {
+                        playbackManager.removeFromQueue(position);
+                        
+                        // Update the bottom sheet
+                        List<Song> updatedQueue = playbackManager.getQueue();
+                        int updatedIndex = playbackManager.getCurrentQueueIndex();
+                        if (sheetHolder[0] != null) {
+                            sheetHolder[0].updateQueue(updatedQueue, updatedIndex);
+                        }
+                        
+                        if (updatedQueue.isEmpty()) {
+                            if (sheetHolder[0] != null) {
+                                sheetHolder[0].dismiss();
+                            }
+                            Toast.makeText(FullScreenPlayerActivity.this, 
+                                "Queue is now empty", Toast.LENGTH_SHORT).show();
+                        }
+                    }
+                }
+            }
+        );
+        
+        sheetHolder[0] = queueSheet;
+        queueSheet.show();
     }
 }

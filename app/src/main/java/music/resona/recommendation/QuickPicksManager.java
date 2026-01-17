@@ -27,7 +27,7 @@ import music.resona.online.bridge.models.YTItemResult;
 public class QuickPicksManager {
     
     private static final String TAG = "QuickPicksManager";
-    private static final int QUICK_PICKS_LIMIT = 20;
+    private static final int QUICK_PICKS_LIMIT = 12; // 6 visible rows (2 per row)
     
     private final Context context;
     private final QuickPicksDatabase database;
@@ -193,16 +193,89 @@ public class QuickPicksManager {
                     }
                 }
                 
-                Log.d(TAG, "Loaded " + fallbackPicks.size() + " songs from API fallback");
-                callback.onQuickPicksGenerated(fallbackPicks, false);
+                if (!fallbackPicks.isEmpty()) {
+                    Log.d(TAG, "Loaded " + fallbackPicks.size() + " songs from API fallback");
+                    callback.onQuickPicksGenerated(fallbackPicks, false);
+                } else {
+                    Log.w(TAG, "API fallback returned no songs, using hardcoded defaults");
+                    loadHardcodedDefaults(callback);
+                }
             }
             
             @Override
             public void onError(@NonNull BridgeException error) {
-                Log.e(TAG, "Failed to load API fallback: " + error.getMessage());
-                callback.onError(error.getMessage());
+                Log.e(TAG, "API fallback failed: " + error.getMessage() + ", using hardcoded defaults");
+                loadHardcodedDefaults(callback);
             }
         });
+    }
+    
+    /**
+     * Emergency fallback: hardcoded popular songs for new users.
+     * Used when both local data and API are unavailable.
+     */
+    private void loadHardcodedDefaults(QuickPicksCallback callback) {
+        List<YTItemResult> defaultPicks = createHardcodedSongs();
+        Log.d(TAG, "Using " + defaultPicks.size() + " hardcoded default songs");
+        callback.onQuickPicksGenerated(defaultPicks, false);
+    }
+    
+    /**
+     * Create hardcoded popular songs for emergency fallback.
+     * These are universally popular tracks that work for new users.
+     */
+    private List<YTItemResult> createHardcodedSongs() {
+        List<YTItemResult> hardcodedSongs = new ArrayList<>();
+        String[][] songData = {
+            // Format: {videoId, title, artist, thumbnail, duration}
+            {"60ItHLz5WEA", "Faded", "Alan Walker", "https://i.ytimg.com/vi/60ItHLz5WEA/maxresdefault.jpg", "212"},
+            {"RgKAFK5djSk", "Shape of You", "Ed Sheeran", "https://i.ytimg.com/vi/RgKAFK5djSk/maxresdefault.jpg", "233"},
+            {"kJQP7kiw5Fk", "Despacito", "Luis Fonsi ft. Daddy Yankee", "https://i.ytimg.com/vi/kJQP7kiw5Fk/maxresdefault.jpg", "282"},
+            {"pRpeEdMmmQ0", "Shakira: Waka Waka", "Shakira", "https://i.ytimg.com/vi/pRpeEdMmmQ0/maxresdefault.jpg", "217"},
+            {"hLQl3WQQoQ0", "Someone Like You", "Adele", "https://i.ytimg.com/vi/hLQl3WQQoQ0/maxresdefault.jpg", "285"},
+            {"YQHsXMglC9A", "Hello", "Adele", "https://i.ytimg.com/vi/YQHsXMglC9A/maxresdefault.jpg", "367"},
+            {"JGwWNGJdvx8", "See You Again", "Wiz Khalifa ft. Charlie Puth", "https://i.ytimg.com/vi/JGwWNGJdvx8/maxresdefault.jpg", "229"},
+            {"OPf0YbXqDm0", "Uptown Funk", "Mark Ronson ft. Bruno Mars", "https://i.ytimg.com/vi/OPf0YbXqDm0/maxresdefault.jpg", "270"},
+            {"CevxZvSJLk8", "Roar", "Katy Perry", "https://i.ytimg.com/vi/CevxZvSJLk8/maxresdefault.jpg", "223"},
+            {"iLBBRuVDOo4", "Cheap Thrills", "Sia", "https://i.ytimg.com/vi/iLBBRuVDOo4/maxresdefault.jpg", "210"},
+            {"SlPhMPnQ58k", "Stressed Out", "Twenty One Pilots", "https://i.ytimg.com/vi/SlPhMPnQ58k/maxresdefault.jpg", "202"},
+            {"Zi_XLOBDo_Y", "Billie Jean", "Michael Jackson", "https://i.ytimg.com/vi/Zi_XLOBDo_Y/maxresdefault.jpg", "294"}
+        };
+        
+        for (String[] song : songData) {
+            // Create artist list
+            List<music.resona.online.bridge.models.ArtistResult> artists = new ArrayList<>();
+            if (song[2] != null && !song[2].isEmpty()) {
+                artists.add(new music.resona.online.bridge.models.ArtistResult(
+                    "", // artistId - can be empty
+                    song[2] // artist name
+                ));
+            }
+
+            YTItemResult item = new YTItemResult(
+                song[0],           // id
+                song[1],           // title
+                song[3],           // thumbnail
+                "song",           // type
+                artists,           // artists
+                null,              // album
+                Integer.parseInt(song[4]), // duration
+                false,             // explicit
+                null,              // shareLink
+                null,              // browseId
+                null,              // playlistId
+                null,              // chartPosition
+                null               // chartChange
+            );
+            
+            hardcodedSongs.add(item);
+            
+            if (hardcodedSongs.size() >= QUICK_PICKS_LIMIT) {
+                break;
+            }
+        }
+        
+        return hardcodedSongs;
     }
     
     /**

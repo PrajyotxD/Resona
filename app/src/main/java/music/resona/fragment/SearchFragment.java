@@ -257,9 +257,35 @@ public class SearchFragment extends Fragment implements SearchResultsAdapter.OnI
         android.util.Log.d("SearchFragment", "Item clicked - Type: " + type + ", Title: " + item.getTitle() + ", BrowseId: " + item.getBrowseId());
         
         if ("song".equals(type)) {
-            // Play song
-            Toast.makeText(requireContext(), "Playing: " + item.getTitle(), Toast.LENGTH_SHORT).show();
-            // TODO: Implement playback
+            // Play song with radio mode for continuous playback
+            String videoId = item.getId();
+            if (videoId == null || videoId.isEmpty()) {
+                Toast.makeText(requireContext(), "Cannot play: No video ID", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            
+            // Extract artist name from search result
+            String artistName = null;
+            if (item.getArtists() != null && !item.getArtists().isEmpty()) {
+                artistName = item.getArtists().get(0).getName();
+            }
+            
+            // Create song object
+            music.resona.models.Song song = new music.resona.models.Song(
+                videoId,
+                item.getTitle(),
+                artistName,
+                null, // album
+                item.getThumbnail(),
+                item.getDuration() != null ? item.getDuration() : 0
+            );
+            
+            // Play via MainActivity
+            if (getActivity() instanceof music.resona.MainActivity) {
+                ((music.resona.MainActivity) getActivity()).playRadio(song);
+            } else {
+                Toast.makeText(requireContext(), "Cannot play song", Toast.LENGTH_SHORT).show();
+            }
         } else if ("album".equals(type) || "playlist".equals(type)) {
             // Open album/playlist detail
             String browseId = item.getBrowseId() != null ? item.getBrowseId() : item.getPlaylistId();

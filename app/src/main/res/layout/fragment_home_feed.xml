@@ -110,15 +110,39 @@
                     app:chipSpacingHorizontal="10dp" />
             </HorizontalScrollView>
 
-            <!-- Quick Picks Grid -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/rv_quick_picks"
+            <!-- Quick Picks Section -->
+            <LinearLayout
+                android:id="@+id/ll_quick_picks_section"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:clipToPadding="false"
-                android:nestedScrollingEnabled="false"
-                android:visibility="gone" />
+                android:orientation="vertical"
+                android:layout_marginTop="16dp"
+                android:visibility="gone">
+
+                <!-- Quick Picks Title -->
+                <TextView
+                    android:id="@+id/tv_quick_picks_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="16dp"
+                    android:paddingEnd="16dp"
+                    android:paddingBottom="12dp"
+                    android:text="Quick picks"
+                    android:textSize="20sp"
+                    android:textColor="#F8BBD0"
+                    android:textStyle="bold" />
+
+                <!-- Quick Picks Horizontal List -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/rv_quick_picks"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingStart="12dp"
+                    android:paddingEnd="12dp" />
+
+            </LinearLayout>
 
             <!-- Home Sections RecyclerView -->
             <androidx.recyclerview.widget.RecyclerView

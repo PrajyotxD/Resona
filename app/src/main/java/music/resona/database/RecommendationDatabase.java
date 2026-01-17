@@ -2,6 +2,7 @@ package music.resona.database;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
@@ -63,9 +64,12 @@ public class RecommendationDatabase {
                            String albumName, String albumId, 
                            String thumbnail, long playDurationMs, float completionRate) {
         
+        Log.d("RecommendationDB", "recordPlay() - " + title + " by " + artistName);
+        
         ListeningHistory history = listeningHistoryMap.get(videoId);
         
         if (history == null) {
+            Log.d("RecommendationDB", "  Creating new history entry");
             history = new ListeningHistory();
             history.setVideoId(videoId);
             history.setTitle(title);
@@ -74,12 +78,16 @@ public class RecommendationDatabase {
             history.setAlbumName(albumName);
             history.setAlbumId(albumId);
             history.setThumbnail(thumbnail);
+        } else {
+            Log.d("RecommendationDB", "  Updating existing history entry");
         }
         
         history.incrementPlayCount();
         history.addPlayTime(playDurationMs);
         history.setCompletionRate(completionRate);
         history.setLastPlayedAt(System.currentTimeMillis());
+        
+        Log.d("RecommendationDB", "  New play count: " + history.getPlayCount());
         
         listeningHistoryMap.put(videoId, history);
         
@@ -89,8 +97,18 @@ public class RecommendationDatabase {
             
             // Track favorite artists (played more than 10 times)
             if (history.getPlayCount() > 10) {
-                favoriteArtists.add(artistId);
+                if (!favoriteArtists.contains(artistId)) {
+                    Log.d("RecommendationDB", "  ✓ Added to favorite artists: " + artistName + " (" + artistId + ")");
+                    favoriteArtists.add(artistId);
+                } else {
+                    Log.d("RecommendationDB", "  Already a favorite artist: " + artistName);
+                }
+                Log.d("RecommendationDB", "  Total favorite artists now: " + favoriteArtists.size());
+            } else {
+                Log.d("RecommendationDB", "  Not yet a favorite (plays: " + history.getPlayCount() + "/10)");
             }
+        } else {
+            Log.w("RecommendationDB", "  No artist ID provided - cannot track as favorite");
         }
         
         // Create album relationship if available
@@ -167,10 +185,21 @@ public class RecommendationDatabase {
      * Get songs by engagement score.
      */
     public List<ListeningHistory> getTopEngaged(int limit) {
-        return listeningHistoryMap.values().stream()
+        Log.d("RecommendationDB", "getTopEngaged() called with limit: " + limit);
+        Log.d("RecommendationDB", "  Total songs in history: " + listeningHistoryMap.size());
+        
+        List<ListeningHistory> topEngaged = listeningHistoryMap.values().stream()
                 .sorted((a, b) -> Float.compare(b.getEngagementScore(), a.getEngagementScore()))
                 .limit(limit)
                 .collect(Collectors.toList());
+        
+        Log.d("RecommendationDB", "  Returning " + topEngaged.size() + " top engaged songs");
+        for (int i = 0; i < Math.min(topEngaged.size(), 3); i++) {
+            ListeningHistory h = topEngaged.get(i);
+            Log.d("RecommendationDB", "    " + (i+1) + ". " + h.getTitle() + " (engagement: " + h.getEngagementScore() + ", plays: " + h.getPlayCount() + ")");
+        }
+        
+        return topEngaged;
     }
     
     // ==================== Relationships ====================
@@ -210,31 +239,47 @@ public class RecommendationDatabase {
      * Get related songs based on listening patterns.
      */
     public List<String> getRelatedSongs(@NonNull String videoId, int limit) {
+        Log.d("RecommendationDB", "getRelatedSongs() called for videoId: " + videoId + ", limit: " + limit);
+        
         // Find songs from same artist
         List<ContentRelationship> artistRels = getRelationships(videoId, 
                 ContentRelationship.RelationType.SONG_TO_ARTIST);
+        
+        Log.d("RecommendationDB", "  Found " + artistRels.size() + " artist relationships");
         
         Set<String> relatedSongs = new HashSet<>();
         
         for (ContentRelationship rel : artistRels) {
             String artistId = rel.getTargetId();
+            Log.d("RecommendationDB", "  Searching songs by artist: " + artistId);
             
             // Find other songs by this artist
-            relationshipsMap.values().stream()
+            List<String> songsFromArtist = relationshipsMap.values().stream()
                     .filter(r -> r.getTargetId().equals(artistId) && 
                                  r.getRelationType() == ContentRelationship.RelationType.SONG_TO_ARTIST)
                     .filter(r -> !r.getSourceId().equals(videoId))
                     .map(ContentRelationship::getSourceId)
                     .limit(limit)
-                    .forEach(relatedSongs::add);
+                    .collect(Collectors.toList());
+            
+            Log.d("RecommendationDB", "    Found " + songsFromArtist.size() + " songs by this artist");
+            relatedSongs.addAll(songsFromArtist);
         }
         
+        Log.d("RecommendationDB", "  Total related songs found: " + relatedSongs.size());
         return new ArrayList<>(relatedSongs);
     }
     
     // ==================== Favorite Artists ====================
     
     public Set<String> getFavoriteArtists() {
+        Log.d("RecommendationDB", "getFavoriteArtists() called");
+        Log.d("RecommendationDB", "  Total favorite artists: " + favoriteArtists.size());
+        if (!favoriteArtists.isEmpty()) {
+            Log.d("RecommendationDB", "  Favorite artist IDs: " + favoriteArtists);
+        } else {
+            Log.w("RecommendationDB", "  No favorite artists found!");
+        }
         return new HashSet<>(favoriteArtists);
     }
     

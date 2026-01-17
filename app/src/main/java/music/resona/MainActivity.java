@@ -38,6 +38,12 @@ import music.resona.ui.ResonaMiniPlayer;
 import music.resona.utils.UiUXUtil;
 import music.resona.viewmodel.AccountInfoViewModel;
 
+// New comprehensive playback system
+import music.resona.playback.PlaybackManager;
+import music.resona.playback.QueueManager;
+import music.resona.playback.QuickPicksManager;
+import music.resona.playback.PlaybackQueue;
+
 /**
  * Main activity hosting the primary navigation and fragments.
  * 
@@ -56,6 +62,11 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
     private MusicPlaybackManager playbackManager;
     private AccountInfoViewModel accountInfoViewModel;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    
+    // New comprehensive playback system
+    private PlaybackManager newPlaybackManager;
+    private QueueManager queueManager;
+    private QuickPicksManager quickPicksManager;
     
     // Fragment instances - cached for state retention
     private HomeFeed homeFeedFragment;
@@ -91,6 +102,10 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
         playbackManager = MusicPlaybackManager.getInstance(this);
         playbackManager.addListener(this);
         
+        // TODO: Integrate new comprehensive playback system with existing MusicPlaybackManager
+        // Temporarily disabled to prevent queue conflicts - two systems were fighting each other
+        // initializeNewPlaybackSystem();
+        
         if (savedInstanceState == null) {
             // Initialize cached fragments
             homeFeedFragment = HomeFeed.newInstance();
@@ -115,12 +130,105 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
         }
     }
     
+    /**
+     * Initialize the new comprehensive playback system.
+     * Sets up PlaybackManager, QueueManager, and QuickPicksManager.
+     */
+    private void initializeNewPlaybackSystem() {
+        Log.d(TAG, "Initializing new comprehensive playback system");
+        
+        try {
+            // Initialize managers
+            newPlaybackManager = new PlaybackManager(this);
+            queueManager = new QueueManager(this);
+            quickPicksManager = new QuickPicksManager(this);
+            
+            // Set up playback callbacks
+            newPlaybackManager.setPlaybackCallback(new PlaybackManager.PlaybackCallback() {
+                @Override
+                public void onPlaybackStarted() {
+                    Log.d(TAG, "New playback system: Playback started");
+                }
+                
+                @Override
+                public void onAutoSkipToNext() {
+                    Log.d(TAG, "New playback system: Auto-skipping to next track");
+                    // Handle auto-skip
+                    queueManager.getCurrentQueue(new QueueManager.QueueCallback() {
+                        @Override
+                        public void onQueueLoaded(PlaybackQueue queue) {
+                            if (queue != null && queue.size() > 0) {
+                                queueManager.skipToNext();
+                                Song nextSong = queueManager.getCurrentSong();
+                                if (nextSong != null) {
+                                    newPlaybackManager.setPreloadItem(nextSong);
+                                    newPlaybackManager.startPlayback();
+                                }
+                            }
+                        }
+                        
+                        @Override
+                        public void onError(String error) {
+                            Log.e(TAG, "Failed to get queue for auto-skip: " + error);
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(String message) {
+                    Log.e(TAG, "New playback system error: " + message);
+                }
+            });
+            
+            // Restore queue state
+            queueManager.restoreQueueState();
+            
+            // Preload Quick Picks for instant access
+            quickPicksManager.preloadForColdStart();
+            
+            Log.d(TAG, "New playback system initialized successfully");
+            
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to initialize new playback system", e);
+        }
+    }
+    
+    /**
+     * Get the new PlaybackManager instance for use by fragments.
+     */
+    public PlaybackManager getNewPlaybackManager() {
+        return newPlaybackManager;
+    }
+    
+    /**
+     * Get the QueueManager instance for use by fragments.
+     */
+    public QueueManager getQueueManager() {
+        return queueManager;
+    }
+    
+    /**
+     * Get the QuickPicksManager instance for use by fragments.
+     */
+    public QuickPicksManager getQuickPicksManager() {
+        return quickPicksManager;
+    }
+    
     @Override
     protected void onDestroy() {
         super.onDestroy();
         if (playbackManager != null) {
             playbackManager.removeListener(this);
         }
+        
+        // Clean up new playback system
+        if (newPlaybackManager != null) {
+            newPlaybackManager.release();
+        }
+        if (queueManager != null) {
+            queueManager.saveQueueState();
+        }
+        
         if (executorService != null && !executorService.isShutdown()) {
             executorService.shutdown();
         }
@@ -347,6 +455,36 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
     }
     
     /**
+     * Play radio/automix from a seed song - automatically queues similar songs for continuous playback.
+     * Use this for home feed clicks to enable endless playback.
+     */
+    public void playRadio(@NonNull Song song) {
+        if (playbackManager != null) {
+            showMiniPlayer(song);
+            miniPlayer.setLoading(true);
+            
+            playbackManager.playRadio(song, new MusicPlaybackManager.PlaybackCallback() {
+                @Override
+                public void onSuccess() {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        miniPlayer.setPlaying(true);
+                    });
+                }
+                
+                @Override
+                public void onError(String message) {
+                    runOnUiThread(() -> {
+                        miniPlayer.setLoading(false);
+                        android.widget.Toast.makeText(MainActivity.this, 
+                            "Error: " + message, android.widget.Toast.LENGTH_SHORT).show();
+                    });
+                }
+            });
+        }
+    }
+    
+    /**
      * Returns the playback manager for fragments to use.
      */
     public MusicPlaybackManager getPlaybackManager() {
@@ -410,6 +548,18 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
                 miniPlayer.setLoading(isLoading);
             }
         });
+    }
+    
+    @Override
+    public void onQueueChanged() {
+        runOnUiThread(() -> {
+            // Update queue display
+            Log.d(TAG, "Queue changed");
+        });
+    }
+    
+    public void onNeedsStreamUrl(Song song) {
+        // Handled by MusicPlaybackManager
     }
     
     /**

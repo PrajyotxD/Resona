@@ -10,6 +10,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -69,6 +70,7 @@ public class HomeFeed extends Fragment {
     private NestedScrollView scrollView;
     private RecyclerView sectionsRecyclerView;
     private RecyclerView quickPicksRecyclerView;
+    private LinearLayout quickPicksSection;
     private View skeletonLoader;
     private View paginationLoader;
     private ChipGroup chipGroup;
@@ -125,6 +127,7 @@ public class HomeFeed extends Fragment {
         scrollView = view.findViewById(R.id.home_scroll_container);
         sectionsRecyclerView = view.findViewById(R.id.recyclerview_sections);
         quickPicksRecyclerView = view.findViewById(R.id.rv_quick_picks);
+        quickPicksSection = view.findViewById(R.id.ll_quick_picks_section);
         skeletonLoader = view.findViewById(R.id.skeleton_loader);
         paginationLoader = view.findViewById(R.id.pagination_loader);
         chipGroup = view.findViewById(R.id.chips);
@@ -163,15 +166,72 @@ public class HomeFeed extends Fragment {
         sectionsRecyclerView.setNestedScrollingEnabled(false);
         sectionsRecyclerView.setItemAnimator(null); // Disable animations for better performance
         
-        // Setup quick picks RecyclerView with grid layout
-        androidx.recyclerview.widget.GridLayoutManager gridLayout = 
+        // Setup quick picks RecyclerView with horizontal scrolling grid (4 rows per column)
+        androidx.recyclerview.widget.GridLayoutManager quickPicksLayoutManager = 
             new androidx.recyclerview.widget.GridLayoutManager(
-                requireContext(), 
-                4, // 4 rows
-                androidx.recyclerview.widget.GridLayoutManager.HORIZONTAL,
+                requireContext(),
+                4, // 4 songs per column (4 rows)
+                androidx.recyclerview.widget.GridLayoutManager.HORIZONTAL, // Scroll horizontally
                 false
             );
-        quickPicksRecyclerView.setLayoutManager(gridLayout);
+        quickPicksRecyclerView.setLayoutManager(quickPicksLayoutManager);
+        
+        // Add spacing between grid items (8dp vertical, 4dp horizontal)
+        int verticalSpacingPx = (int) (3 * getResources().getDisplayMetrics().density);
+        int horizontalSpacingPx = (int) (2 * getResources().getDisplayMetrics().density);
+        quickPicksRecyclerView.addItemDecoration(new androidx.recyclerview.widget.RecyclerView.ItemDecoration() {
+            @Override
+            public void getItemOffsets(@androidx.annotation.NonNull android.graphics.Rect outRect,
+                                     @androidx.annotation.NonNull android.view.View view,
+                                     @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView parent,
+                                     @androidx.annotation.NonNull androidx.recyclerview.widget.RecyclerView.State state) {
+                androidx.recyclerview.widget.GridLayoutManager layoutManager = 
+                    (androidx.recyclerview.widget.GridLayoutManager) parent.getLayoutManager();
+                if (layoutManager == null) return;
+                
+                int position = parent.getChildAdapterPosition(view);
+                int spanIndex = layoutManager.getSpanSizeLookup().getSpanIndex(position, layoutManager.getSpanCount());
+                
+                // Add vertical spacing between rows (except top row)
+                if (spanIndex > 0) {
+                    outRect.top = verticalSpacingPx;
+                }
+                
+                // Add horizontal spacing between columns (except first column)
+                int column = position / 4; // Which column (0-indexed)
+                if (column > 0) {
+                    outRect.left = horizontalSpacingPx;
+                }
+            }
+        });
+        
+        // Add scroll listener for Quick Picks pagination (horizontal scrolling grid)
+        quickPicksRecyclerView.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView recyclerView, int dx, int dy) {
+                super.onScrolled(recyclerView, dx, dy);
+                
+                // Only trigger on rightward scroll (dx > 0)
+                if (dx <= 0) return;
+                
+                androidx.recyclerview.widget.GridLayoutManager layoutManager = 
+                    (androidx.recyclerview.widget.GridLayoutManager) recyclerView.getLayoutManager();
+                if (layoutManager == null) return;
+                
+                int visibleItemCount = layoutManager.getChildCount();
+                int totalItemCount = layoutManager.getItemCount();
+                int lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition();
+                
+                // Load more when user is within 2 columns (8 items) from the end
+                if ((lastVisibleItemPosition + 8) >= totalItemCount) {
+                    if (viewModel.canLoadMoreQuickPicks()) {
+                        Log.d(TAG, "Near end of Quick Picks grid, loading more...");
+                        viewModel.loadMoreQuickPicks();
+                    }
+                }
+            }
+        });
+        
         quickPicksRecyclerView.setNestedScrollingEnabled(false);
         quickPicksRecyclerView.setVisibility(View.GONE);
     }
@@ -349,20 +409,40 @@ public class HomeFeed extends Fragment {
     private void handleQuickPicksUpdate(@Nullable List<YTItemResult> picks) {
         Log.d(TAG, "Quick picks updated: " + (picks != null ? picks.size() : 0));
         
-        if (picks == null || picks.isEmpty() || quickPicksRecyclerView == null) {
-            if (quickPicksRecyclerView != null) {
-                quickPicksRecyclerView.setVisibility(View.GONE);
+        if (picks == null || picks.isEmpty() || quickPicksRecyclerView == null || quickPicksSection == null) {
+            Log.d(TAG, "Hiding quick picks - picks: " + (picks == null ? "null" : picks.size()) + 
+                  ", recyclerView: " + (quickPicksRecyclerView == null ? "null" : "exists") +
+                  ", section: " + (quickPicksSection == null ? "null" : "exists"));
+            if (quickPicksSection != null) {
+                quickPicksSection.setVisibility(View.GONE);
             }
             return;
         }
         
+        Log.d(TAG, "Showing quick picks with " + picks.size() + " items");
+        quickPicksSection.setVisibility(View.VISIBLE);
         quickPicksRecyclerView.setVisibility(View.VISIBLE);
         
         // Prefetch for instant playback
         SongPrefetchHelper.getInstance().prefetchFromHomeFeed(picks, 5);
         
-        quickPicksAdapter = new QuickPicksAdapter(requireContext(), picks);
-        quickPicksRecyclerView.setAdapter(quickPicksAdapter);
+        // Update existing adapter or create new one if needed
+        if (quickPicksAdapter == null) {
+            Log.d(TAG, "Creating new QuickPicksAdapter with " + picks.size() + " items");
+            quickPicksAdapter = new QuickPicksAdapter(requireContext(), picks);
+            quickPicksRecyclerView.setAdapter(quickPicksAdapter);
+        } else {
+            Log.d(TAG, "Updating existing QuickPicksAdapter from " + quickPicksAdapter.getItemCount() + " to " + picks.size() + " items");
+            quickPicksAdapter.updateItems(picks);
+        }
+        
+        // Force layout update
+        quickPicksRecyclerView.post(() -> {
+            Log.d(TAG, "QuickPicks RecyclerView - Visibility: " + 
+                  (quickPicksRecyclerView.getVisibility() == View.VISIBLE ? "VISIBLE" : "GONE") +
+                  ", Height: " + quickPicksRecyclerView.getHeight() +
+                  ", Adapter items: " + (quickPicksAdapter != null ? quickPicksAdapter.getItemCount() : "null"));
+        });
     }
     
     private void handleLoadingStateUpdate(@NonNull HomeFeedViewModel.LoadingState state) {
@@ -429,6 +509,7 @@ public class HomeFeed extends Fragment {
         }
         
         Log.d(TAG, "Loading initial data");
+        viewModel.setContext(requireContext());
         
         if (!App.isVisitorDataReady()) {
             Log.d(TAG, "Visitor data not ready, retrying in " + DATA_LOAD_RETRY_MS + "ms");

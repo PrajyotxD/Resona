@@ -1,5 +1,6 @@
 package music.resona.viewmodel;
 
+import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
@@ -11,11 +12,15 @@ import androidx.lifecycle.MutableLiveData;
 import androidx.lifecycle.ViewModel;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import music.resona.models.Song;
+import music.resona.cache.SongPrefetchHelper;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.callbacks.HomePageCallback;
 import music.resona.online.bridge.exceptions.BridgeException;
@@ -23,6 +28,7 @@ import music.resona.online.bridge.models.ChipResult;
 import music.resona.online.bridge.models.HomePageResult;
 import music.resona.online.bridge.models.HomeSectionResult;
 import music.resona.online.bridge.models.YTItemResult;
+import music.resona.playback.QuickPicksManager;
 
 /**
  * Optimized ViewModel for managing home feed data with efficient pagination.
@@ -41,6 +47,9 @@ public class HomeFeedViewModel extends ViewModel {
     private static final int INITIAL_LOAD_BATCH_SIZE = 3; // Load 3 sections initially
     private static final int PAGINATION_BATCH_SIZE = 2; // Load 2 sections per scroll
     private static final long PAGINATION_DEBOUNCE_MS = 500; // Debounce scroll events
+    private static final int QUICK_PICKS_PAGE_SIZE = 20; // Load 20 Quick Picks at a time
+    
+    private Context context; // For QuickPicksManager
     
     // Loading states
     public enum LoadingState {
@@ -64,6 +73,11 @@ public class HomeFeedViewModel extends ViewModel {
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Runnable pendingPaginationRequest;
     private ChipResult currentFilter;
+    
+    // Quick Picks pagination state
+    private List<YTItemResult> allQuickPicks = new ArrayList<>(); // Full list from backend
+    private int quickPicksCurrentPage = 0;
+    private final AtomicBoolean isLoadingQuickPicks = new AtomicBoolean(false);
     
     // Getters
     @NonNull
@@ -169,6 +183,70 @@ public class HomeFeedViewModel extends ViewModel {
         return continuationToken != null 
             && !isPaginating.get() 
             && loadingState.getValue() == LoadingState.IDLE;
+    }
+    
+    /**
+     * Loads more Quick Picks items (pagination for horizontal scroll).
+     * Loads next batch of 20 items from the cached full list.
+     */
+    public void loadMoreQuickPicks() {
+        if (isLoadingQuickPicks.get()) {
+            Log.d(TAG, "Already loading Quick Picks, skipping");
+            return;
+        }
+        
+        if (allQuickPicks.isEmpty()) {
+            Log.d(TAG, "No Quick Picks data available for pagination");
+            return;
+        }
+        
+        int currentSize = quickPicks.getValue() != null ? quickPicks.getValue().size() : 0;
+        if (currentSize >= allQuickPicks.size()) {
+            Log.d(TAG, "All Quick Picks already loaded (" + currentSize + "/" + allQuickPicks.size() + ")");
+            return;
+        }
+        
+        isLoadingQuickPicks.set(true);
+        Log.d(TAG, "Loading more Quick Picks: page " + (quickPicksCurrentPage + 1));
+        
+        executorService.execute(() -> {
+            try {
+                // Calculate next batch
+                int startIndex = currentSize;
+                int endIndex = Math.min(startIndex + QUICK_PICKS_PAGE_SIZE, allQuickPicks.size());
+                List<YTItemResult> nextBatch = allQuickPicks.subList(startIndex, endIndex);
+                
+                Log.d(TAG, "Loading Quick Picks batch: " + startIndex + " to " + endIndex + " (" + nextBatch.size() + " items)");
+                
+                // Add to existing list
+                List<YTItemResult> updatedList = new ArrayList<>(quickPicks.getValue());
+                updatedList.addAll(nextBatch);
+                
+                // Prefetch the new songs
+                if (context != null) {
+                    SongPrefetchHelper.getInstance().prefetchFromHomeFeed(nextBatch, nextBatch.size());
+                }
+                
+                mainHandler.post(() -> {
+                    quickPicks.setValue(updatedList);
+                    quickPicksCurrentPage++;
+                    isLoadingQuickPicks.set(false);
+                    Log.d(TAG, "Quick Picks updated: now showing " + updatedList.size() + "/" + allQuickPicks.size());
+                });
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading more Quick Picks", e);
+                mainHandler.post(() -> isLoadingQuickPicks.set(false));
+            }
+        });
+    }
+    
+    /**
+     * Checks if more Quick Picks can be loaded.
+     */
+    public boolean canLoadMoreQuickPicks() {
+        int currentSize = quickPicks.getValue() != null ? quickPicks.getValue().size() : 0;
+        return !isLoadingQuickPicks.get() && currentSize < allQuickPicks.size();
     }
     
     /**
@@ -336,8 +414,13 @@ public class HomeFeedViewModel extends ViewModel {
     
     @NonNull
     private List<YTItemResult> extractQuickPicks(@NonNull List<HomeSectionResult> sections) {
-        Log.d(TAG, "Extracting quick picks from " + sections.size() + " sections");
+        Log.d(TAG, "===== EXTRACTING QUICK PICKS FROM HOME FEED =====");
+        Log.d(TAG, "Scanning " + sections.size() + " sections");
         
+        List<YTItemResult> extractedPicks = new ArrayList<>();
+        Set<String> addedIds = new HashSet<>();
+        
+        // Collect from ALL matching sections, not just the first one
         for (HomeSectionResult section : sections) {
             String title = section.getTitle();
             if (title == null) continue;
@@ -352,28 +435,98 @@ public class HomeFeedViewModel extends ViewModel {
                 
                 List<YTItemResult> items = section.getItems();
                 if (items != null && !items.isEmpty()) {
-                    // Filter for songs only
-                    List<YTItemResult> songs = new ArrayList<>();
+                    Log.d(TAG, "Found potential Quick Picks section: '" + title + "' with " + items.size() + " items");
+                    
+                    // Filter for songs only and avoid duplicates
+                    int addedFromThisSection = 0;
                     for (YTItemResult item : items) {
                         String type = item.getType();
-                        if (type != null && type.equalsIgnoreCase("SONG")) {
-                            songs.add(item);
-                            if (songs.size() >= 20) break;
+                        if (type != null && type.equalsIgnoreCase("SONG") && addedIds.add(item.getId())) {
+                            extractedPicks.add(item);
+                            addedFromThisSection++;
+                            if (extractedPicks.size() >= 100) break; // Match QuickPicksRepository limit
                         }
                     }
                     
-                    if (!songs.isEmpty()) {
-                        Log.d(TAG, "Found " + songs.size() + " quick picks in: " + title);
-                        return songs;
-                    }
+                    Log.d(TAG, "  → Added " + addedFromThisSection + " unique songs from this section");
                 }
+            }
+            
+            if (extractedPicks.size() >= 100) {
+                Log.d(TAG, "Reached 100 Quick Picks limit, stopping section scan");
+                break;
             }
         }
         
-        Log.d(TAG, "No quick picks section found");
-        return new ArrayList<>();
+        Log.d(TAG, "===== QUICK PICKS EXTRACTION COMPLETE: " + extractedPicks.size() + " songs =====");
+        
+        // Store full list for pagination
+        allQuickPicks = new ArrayList<>(extractedPicks);
+        quickPicksCurrentPage = 0;
+        
+        // Return only first page initially (20 items)
+        int initialSize = Math.min(QUICK_PICKS_PAGE_SIZE, extractedPicks.size());
+        List<YTItemResult> firstPage = extractedPicks.subList(0, initialSize);
+        
+        Log.d(TAG, "Returning initial Quick Picks page: " + firstPage.size() + " items (total available: " + allQuickPicks.size() + ")");
+        
+        // If we have very few picks, supplement with QuickPicksManager
+        if (extractedPicks.size() < 20 && context != null) {
+            Log.d(TAG, "Only " + extractedPicks.size() + " picks from home feed, calling QuickPicksManager for more...");
+            generateLocalQuickPicks();
+        }
+        
+        return firstPage;
     }
     
+    /**
+     * Generate Quick Picks using enhanced QuickPicksManager with cold start prevention.
+     */
+    private void generateLocalQuickPicks() {
+        executorService.execute(() -> {
+            QuickPicksManager manager = new QuickPicksManager(context);
+            
+            // Preload for future cold starts
+            manager.preloadForColdStart();
+            
+            manager.generateQuickPicks(new QuickPicksManager.QuickPicksCallback() {
+                @Override
+                public void onQuickPicksGenerated(List<YTItemResult> picks, boolean personalized) {
+                    // Update on main thread
+                    new Handler(Looper.getMainLooper()).post(() -> {
+                        if (!picks.isEmpty()) {
+                            Log.d(TAG, "Generated " + picks.size() + " quick picks (personalized: " + personalized + ")");
+                            
+                            // Store full list for pagination
+                            allQuickPicks = new ArrayList<>(picks);
+                            quickPicksCurrentPage = 0;
+                            
+                            // Return only first page initially
+                            int initialSize = Math.min(QUICK_PICKS_PAGE_SIZE, picks.size());
+                            List<YTItemResult> firstPage = picks.subList(0, initialSize);
+                            
+                            quickPicks.setValue(firstPage);
+                            Log.d(TAG, "Set initial Quick Picks page: " + firstPage.size() + " items (total: " + allQuickPicks.size() + ")");
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(String error) {
+                    Log.e(TAG, "Failed to generate local quick picks: " + error);
+                }
+            });
+        });
+    }
+    
+    /**
+     * Set context for QuickPicksManager fallback.
+     * Must be called before loading initial data.
+     */
+    public void setContext(@NonNull Context context) {
+        this.context = context.getApplicationContext();
+    }
+
     @Override
     protected void onCleared() {
         super.onCleared();
