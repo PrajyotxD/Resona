@@ -55,6 +55,8 @@ import androidx.core.content.FileProvider;
 import music.resona.R;
 import music.resona.activity.adapters.SongsAdapter;
 import music.resona.activity.models.SongItem;
+import music.resona.manager.MusicPlaybackManager;
+import music.resona.models.Song;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.callbacks.HomePageCallback;
 import music.resona.online.bridge.exceptions.BridgeException;
@@ -92,6 +94,7 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     private int currentGradientColor = Color.parseColor("#1DB954");
     private float lastOffset = 0f;
     private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private MusicPlaybackManager playbackManager;
     
     // Intent extras
     private String browseId;
@@ -170,6 +173,7 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         btnMore = findViewById(R.id.btn_more);
         btnShare = findViewById(R.id.btn_share);
         btnPlay = findViewById(R.id.btn_play);
+        playbackManager = MusicPlaybackManager.getInstance(this);
         
         // Set transition name for shared element animation
         if (transitionName != null) {
@@ -345,6 +349,8 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         
         btnPlay.setOnClickListener(v -> {
             if (!allSongs.isEmpty()) {
+            List<Song> songList = convertToSongList(allSongs);
+                playbackManager.playQueue(songList, 0,null);
                 android.util.Log.d("Vibe", "Play clicked, songs: " + allSongs.size());
                 Toast.makeText(this, "Playing playlist", Toast.LENGTH_SHORT).show();
                 // TODO: Start playback
@@ -353,6 +359,38 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
             }
         });
     }
+
+    private List<Song> convertToSongList(List<SongItem> songItems) {
+    List<Song> songs = new ArrayList<>();
+    for (SongItem item : songItems) {
+        // Note: Song constructor requires duration in seconds (int)
+        // You can parse the "m:ss" string or modify SongItem to store raw seconds
+        int durationSecs = parseDuration(item.getDuration()); 
+        
+        songs.add(new Song(
+            item.getVideoId(),
+            item.getTitle(),
+            item.getArtist(),
+            item.getAlbumTitle(),
+            item.getThumbnailUrl(),
+            durationSecs
+        ));
+    }
+    return songs;
+}
+
+private int parseDuration(String duration) {
+    try {
+        String[] parts = duration.split(":");
+        if (parts.length == 2) {
+            return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);
+        }
+    } catch (Exception e) {
+        return 0;
+    }
+    return 0;
+}
+
     
     private void showSearchBar() {
         topBar.setVisibility(View.GONE);
@@ -608,9 +646,11 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
 
     @Override
     public void onSongClick(SongItem song, int position) {
+        List<Song> songList = convertToSongList(allSongs);
+        playbackManager.playQueue(songList, position, null);
         android.util.Log.d("Vibe", "Song clicked: " + song.getTitle() + " at position " + position);
         Toast.makeText(this, "Playing: " + song.getTitle(), Toast.LENGTH_SHORT).show();
-        // TODO: Start playback
+
     }
 
     @Override
@@ -1197,6 +1237,9 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         int secs = seconds % 60;
         return String.format("%d:%02d", minutes, secs);
     }
+
+
+
     
     @Override
     protected void onDestroy() {
@@ -1205,4 +1248,5 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
             executor.shutdown();
         }
     }
+
 }
