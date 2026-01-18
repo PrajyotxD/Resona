@@ -87,6 +87,8 @@ public class HomeFeed extends Fragment {
     private int previousSectionCount = 0;
     private boolean hasLoadedData = false;
     private int savedScrollPosition = 0;
+    private List<HomeSectionResult> cachedPersonalizedSections = new ArrayList<>();
+    private boolean personalizedSectionsAdded = false;
     
     @NonNull
     public static HomeFeed newInstance() {
@@ -297,6 +299,9 @@ public class HomeFeed extends Fragment {
         // Observe home sections
         viewModel.getHomeSections().observe(getViewLifecycleOwner(), this::handleSectionsUpdate);
         
+        // Observe personalized sections
+        viewModel.getPersonalizedSections().observe(getViewLifecycleOwner(), this::handlePersonalizedSectionsUpdate);
+        
         // Observe chips
         viewModel.getChips().observe(getViewLifecycleOwner(), this::handleChipsUpdate);
         
@@ -332,6 +337,13 @@ public class HomeFeed extends Fragment {
             sectionsAdapter = new HomeSectionAdapter(requireContext(), sections);
             sectionsRecyclerView.setAdapter(sectionsAdapter);
             previousSectionCount = sections.size();
+            
+            // Add cached personalized sections if available
+            if (!cachedPersonalizedSections.isEmpty() && !personalizedSectionsAdded) {
+                sectionsAdapter.addSections(0, cachedPersonalizedSections);
+                personalizedSectionsAdded = true;
+                Log.d(TAG, "Added cached " + cachedPersonalizedSections.size() + " personalized sections to new adapter");
+            }
         } else if (isPagination) {
             // Pagination: add only new sections without reloading existing ones
             List<HomeSectionResult> newSections = sections.subList(previousSectionCount, sections.size());
@@ -343,6 +355,14 @@ public class HomeFeed extends Fragment {
             Log.d(TAG, "Fresh load detected, updating all sections");
             sectionsAdapter.updateSections(sections);
             previousSectionCount = sections.size();
+            personalizedSectionsAdded = false;
+            
+            // Re-add personalized sections after refresh
+            if (!cachedPersonalizedSections.isEmpty()) {
+                sectionsAdapter.addSections(0, cachedPersonalizedSections);
+                personalizedSectionsAdded = true;
+                Log.d(TAG, "Re-added " + cachedPersonalizedSections.size() + " personalized sections after refresh");
+            }
         }
         
         // Hide skeleton on first data
@@ -519,6 +539,34 @@ public class HomeFeed extends Fragment {
         
         isLoadingInitialData = true;
         viewModel.loadHomeData();
+        viewModel.loadPersonalizedSections();
+    }
+    
+    private void handlePersonalizedSectionsUpdate(@NonNull List<HomeSectionResult> personalizedSections) {
+        Log.d(TAG, "Personalized sections updated: " + personalizedSections.size());
+        
+        if (personalizedSections.isEmpty()) {
+            Log.d(TAG, "No personalized sections available yet");
+            return;
+        }
+        
+        // Cache the personalized sections
+        cachedPersonalizedSections = new ArrayList<>(personalizedSections);
+        
+        if (sectionsAdapter == null) {
+            Log.d(TAG, "Adapter not ready yet, personalized sections cached and will be added when home sections load");
+            return;
+        }
+        
+        if (personalizedSectionsAdded) {
+            Log.d(TAG, "Personalized sections already added, skipping");
+            return;
+        }
+        
+        // Insert personalized sections at the top
+        sectionsAdapter.addSections(0, personalizedSections);
+        personalizedSectionsAdded = true;
+        Log.d(TAG, "Added " + personalizedSections.size() + " personalized sections at position 0");
     }
     
     @Override

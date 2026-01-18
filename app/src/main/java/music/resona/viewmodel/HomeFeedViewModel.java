@@ -3,6 +3,8 @@ package music.resona.viewmodel;
 import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -50,6 +52,7 @@ public class HomeFeedViewModel extends ViewModel {
     private static final int QUICK_PICKS_PAGE_SIZE = 20; // Load 20 Quick Picks at a time
     
     private Context context; // For QuickPicksManager
+    private PersonalizedHomeFeed personalizedHomeFeed; // For recommendation sections
     
     // Loading states
     public enum LoadingState {
@@ -61,6 +64,7 @@ public class HomeFeedViewModel extends ViewModel {
     
     // LiveData
     private final MutableLiveData<List<HomeSectionResult>> homeSections = new MutableLiveData<>(new ArrayList<>());
+    private final MutableLiveData<List<HomeSectionResult>> personalizedSections = new MutableLiveData<>(new ArrayList<>());
     private final MutableLiveData<List<ChipResult>> chips = new MutableLiveData<>(new ArrayList<>());
     private final MutableLiveData<List<YTItemResult>> quickPicks = new MutableLiveData<>(new ArrayList<>());
     private final MutableLiveData<LoadingState> loadingState = new MutableLiveData<>(LoadingState.IDLE);
@@ -83,6 +87,11 @@ public class HomeFeedViewModel extends ViewModel {
     @NonNull
     public LiveData<List<HomeSectionResult>> getHomeSections() {
         return homeSections;
+    }
+    
+    @NonNull
+    public LiveData<List<HomeSectionResult>> getPersonalizedSections() {
+        return personalizedSections;
     }
     
     @NonNull
@@ -317,8 +326,18 @@ public class HomeFeedViewModel extends ViewModel {
         errorMessage.setValue("Failed to load home feed: " + error.getMessage());
         loadingState.setValue(LoadingState.IDLE);
         
-        // Try explore feed as fallback
-        loadExploreFallback();
+        // Check if we have personalized sections to fall back to
+        List<HomeSectionResult> personalizedList = personalizedSections.getValue();
+        if (personalizedList != null && !personalizedList.isEmpty()) {
+            Log.d(TAG, "Using offline mode with " + personalizedList.size() + " personalized sections");
+            homeSections.setValue(new ArrayList<>(personalizedList));
+            
+            // Add offline fallback content after delay
+            createOfflineFallbackSections();
+        } else {
+            // Try explore feed as fallback
+            loadExploreFallback();
+        }
     }
     
     private void loadExploreFallback() {
@@ -337,12 +356,66 @@ public class HomeFeedViewModel extends ViewModel {
             public void onError(BridgeException error) {
                 Log.e(TAG, "Explore fallback failed: " + error.getMessage());
                 errorMessage.setValue("Unable to load content");
+                
+                // Final fallback - show empty message
+                List<HomeSectionResult> fallback = new ArrayList<>();
+                fallback.add(new HomeSectionResult("Offline Mode", new ArrayList<>()));
+                homeSections.setValue(fallback);
             }
         });
     }
     
+    /**
+     * Create offline fallback sections when no internet is available.
+     */
+    private void createOfflineFallbackSections() {
+        mainHandler.postDelayed(() -> {
+            List<HomeSectionResult> personalizedList = personalizedSections.getValue();
+            if (personalizedList != null && !personalizedList.isEmpty()) {
+                // Add some context sections
+                List<HomeSectionResult> fallbackSections = new ArrayList<>();
+                
+                // Create a combined library section from all personalized content
+                List<YTItemResult> allLibraryItems = new ArrayList<>();
+                for (HomeSectionResult section : personalizedList) {
+                    allLibraryItems.addAll(section.getItems());
+                }
+                
+                // Limit to avoid duplicates and improve performance
+                if (allLibraryItems.size() > 15) {
+                    allLibraryItems = allLibraryItems.subList(0, 15);
+                }
+                
+                if (!allLibraryItems.isEmpty()) {
+                    fallbackSections.add(new HomeSectionResult("Your Library", allLibraryItems));
+                }
+                
+                // Add info section
+                fallbackSections.add(new HomeSectionResult("Offline Mode - Connect to internet for more content", new ArrayList<>()));
+                
+                // Append to current sections
+                List<HomeSectionResult> current = homeSections.getValue();
+                if (current != null) {
+                    List<HomeSectionResult> updated = new ArrayList<>(current);
+                    updated.addAll(fallbackSections);
+                    homeSections.setValue(updated);
+                    
+                    // Set offline continuation token
+                    continuationToken = "offline_mode";
+                }
+            }
+        }, 1500); // Give time for personalized sections to load
+    }
+    
     private void executePagination() {
         if (!canLoadMore()) {
+            return;
+        }
+        
+        // Handle offline mode
+        if ("offline_mode".equals(continuationToken)) {
+            Log.d(TAG, "Offline mode - no more content available");
+            continuationToken = null; // Stop further pagination
             return;
         }
         
@@ -525,6 +598,39 @@ public class HomeFeedViewModel extends ViewModel {
      */
     public void setContext(@NonNull Context context) {
         this.context = context.getApplicationContext();
+        if (personalizedHomeFeed == null) {
+            personalizedHomeFeed = new PersonalizedHomeFeed(context);
+            // Observe personalized sections from PersonalizedHomeFeed
+            personalizedHomeFeed.getPersonalizedSections().observeForever(sections -> {
+                personalizedSections.postValue(sections);
+                Log.d(TAG, "Personalized sections updated: " + sections.size());
+            });
+        }
+    }
+    
+    /**
+     * Loads personalized recommendation sections based on user's listening history.
+     */
+    public void loadPersonalizedSections() {
+        if (personalizedHomeFeed == null) {
+            Log.w(TAG, "PersonalizedHomeFeed not initialized, call setContext() first");
+            return;
+        }
+        
+        Log.d(TAG, "Loading personalized recommendation sections...");
+        executorService.execute(() -> {
+            try {
+                personalizedHomeFeed.generatePersonalizedFeed();
+                mainHandler.post(() -> {
+                    Log.d(TAG, "Started generating personalized feed");
+                });
+            } catch (Exception e) {
+                Log.e(TAG, "Error loading personalized sections", e);
+                mainHandler.post(() -> {
+                    personalizedSections.setValue(new ArrayList<>());
+                });
+            }
+        });
     }
 
     @Override

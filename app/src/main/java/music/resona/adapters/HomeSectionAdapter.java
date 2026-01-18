@@ -68,6 +68,17 @@ public class HomeSectionAdapter extends RecyclerView.Adapter<RecyclerView.ViewHo
         this.sections.addAll(newSections);
         notifyItemRangeInserted(oldSize * ITEMS_PER_SECTION, newSections.size() * ITEMS_PER_SECTION);
     }
+    
+    /**
+     * Inserts sections at a specific position.
+     * 
+     * @param position the position to insert at
+     * @param newSections the new sections to insert
+     */
+    public void addSections(int position, @NonNull List<HomeSectionResult> newSections) {
+        this.sections.addAll(position, newSections);
+        notifyItemRangeInserted(position * ITEMS_PER_SECTION, newSections.size() * ITEMS_PER_SECTION);
+    }
 
     /**
      * Determines the view type for the given position.

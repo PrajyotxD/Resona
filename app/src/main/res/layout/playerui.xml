@@ -1,0 +1,275 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#6E625B">
+
+    <!-- Now Playing -->
+    <TextView
+        android:id="@+id/tvNowPlaying"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Now Playing"
+        android:textColor="#FFFFFF"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"/>
+
+    <TextView
+        android:id="@+id/tvDevice"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Softt hp"
+        android:textColor="#DDDDDD"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/tvNowPlaying"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="4dp"/>
+
+    <!-- Album Art -->
+    <ImageView
+        android:id="@+id/imgAlbum"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:scaleType="centerCrop"
+        android:src="@drawable/memefi"
+        android:background="@drawable/bg_circle"
+        app:layout_constraintTop_toBottomOf="@id/tvDevice"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintDimensionRatio="1:1"
+        android:layout_marginTop="16dp"
+        android:layout_marginHorizontal="48dp"/>
+
+    <!-- Song Title -->
+    <TextView
+        android:id="@+id/tvTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="Ankahi Baatein"
+        android:textColor="#FFFFFF"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:maxLines="1"
+        app:layout_constraintTop_toBottomOf="@id/imgAlbum"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btnShare"
+        android:layout_marginTop="20dp"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="12dp"/>
+
+    <!-- Artist -->
+    <TextView
+        android:id="@+id/tvArtist"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="DEVEL"
+        android:textColor="#CCCCCC"
+        android:textSize="14sp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        app:layout_constraintTop_toBottomOf="@id/tvTitle"
+        app:layout_constraintStart_toStartOf="@id/tvTitle"
+        app:layout_constraintEnd_toStartOf="@id/btnShare"
+        android:layout_marginTop="4dp"/>
+
+    <!-- Share -->
+    <ImageButton
+        android:id="@+id/btnShare"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_circle"
+        android:src="@android:drawable/ic_menu_share"
+        android:tint="#FFF"
+        app:layout_constraintTop_toTopOf="@id/tvTitle"
+        app:layout_constraintBottom_toBottomOf="@id/tvArtist"
+        app:layout_constraintEnd_toStartOf="@id/btnFav"
+        android:layout_marginEnd="12dp"/>
+
+    <!-- Favorite -->
+    <ImageButton
+        android:id="@+id/btnFav"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_circle"
+        android:src="@android:drawable/star_big_off"
+        android:tint="#FFF"
+        app:layout_constraintTop_toTopOf="@id/tvTitle"
+        app:layout_constraintBottom_toBottomOf="@id/tvArtist"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginEnd="24dp"/>
+
+    <!-- Seekbar -->
+    <SeekBar
+        android:id="@+id/seekBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:progress="0"
+        app:layout_constraintTop_toBottomOf="@id/tvArtist"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"
+        android:layout_marginHorizontal="24dp"/>
+
+    <!-- Time -->
+    <TextView
+        android:id="@+id/tvCurrent"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="0:00"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/seekBar"
+        app:layout_constraintStart_toStartOf="@id/seekBar"
+        android:layout_marginTop="4dp"/>
+
+    <TextView
+        android:id="@+id/tvDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="2:59"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp"
+        app:layout_constraintTop_toBottomOf="@id/seekBar"
+        app:layout_constraintEnd_toEndOf="@id/seekBar"
+        android:layout_marginTop="4dp"/>
+
+    <!-- Controls -->
+    <LinearLayout
+        android:id="@+id/playerControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        app:layout_constraintTop_toBottomOf="@id/tvCurrent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottomControls"
+        android:layout_marginTop="20dp"
+        android:layout_marginBottom="12dp">
+
+        <ImageButton
+            android:id="@+id/btnPrev"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_circle_button"
+            android:src="@android:drawable/ic_media_previous"
+            android:tint="#FFFFFF"/>
+
+        <Button
+            android:id="@+id/btnPlayPause"
+            android:layout_width="140dp"
+            android:layout_height="56dp"
+            android:text="Play"
+            android:textColor="#6E625B"
+            android:textStyle="bold"
+            android:textSize="16sp"
+            android:background="@drawable/bg_circle"
+            android:layout_marginHorizontal="16dp"/>
+
+        <ImageButton
+            android:id="@+id/btnNext"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:background="@drawable/bg_circle_button"
+            android:src="@android:drawable/ic_media_next"
+            android:tint="#FFFFFF"/>
+    </LinearLayout>
+
+    <!-- Bottom Controls -->
+    <LinearLayout
+        android:id="@+id/bottomControls"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:padding="12dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="8dp">
+
+        <ImageButton
+            android:id="@+id/btnShuffle"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_button_small"
+            android:src="@drawable/shuffle"
+            android:layout_weight="0"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btnTheme"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_button_small"
+            android:src="@drawable/settings"
+            android:layout_weight="0"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btnSkipSilence"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_button_small"
+            android:src="@drawable/ic_settings"
+            android:tint="#FFFFFF"
+            android:layout_weight="0"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btnQueue"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_button_small"
+            android:src="@drawable/queue"
+            android:layout_weight="0"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btnRepeat"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_circle_button_small"
+            android:src="@drawable/share"
+            android:layout_weight="0"/>
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1"/>
+
+        <ImageButton
+            android:id="@+id/btnMenu"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_circle"
+            android:src="@drawable/ic_more_vertical"
+            android:tint="#FFF"
+            android:layout_weight="0"/>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

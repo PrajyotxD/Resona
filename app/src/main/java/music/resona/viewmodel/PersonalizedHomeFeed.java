@@ -13,9 +13,11 @@ import java.util.List;
 import music.resona.database.RecommendationDatabase;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.callbacks.HomePageCallback;
+import music.resona.online.bridge.callbacks.SearchCallback;
 import music.resona.online.bridge.exceptions.BridgeException;
 import music.resona.online.bridge.models.HomePageResult;
 import music.resona.online.bridge.models.HomeSectionResult;
+import music.resona.online.bridge.models.SearchResult;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.recommendation.RecommendationEngine;
 import music.resona.recommendation.RecommendationSection;
@@ -64,7 +66,7 @@ public class PersonalizedHomeFeed {
      * Always loads both: personalized sections from history + YouTube home feed.
      */
     public void generatePersonalizedFeed() {
-        isLoading.setValue(true);
+        isLoading.postValue(true);
         
         // Get all recommendation sections from engine
         List<RecommendationSection> recommendations = recommendationEngine.generateAllRecommendations();
@@ -80,13 +82,11 @@ public class PersonalizedHomeFeed {
                 case RECENTLY_PLAYED:
                 case ON_REPEAT:
                 case FORGOTTEN_FAVORITES:
-                    // These have video IDs already, fetch their details
-                    sections.add(createSectionFromVideoIds(rec));
-                    break;
-                    
                 case BECAUSE_YOU_LISTENED:
-                    // Fetch related content from API
-                    fetchRelatedContent(rec, sections);
+                    // Create local section immediately for instant display
+                    sections.add(createSectionFromVideoIds(rec));
+                    // Also fetch additional content from YouTube API
+                    fetchRelatedContentWithArtistId(rec);
                     break;
                     
                 case SIMILAR_ARTISTS:
@@ -107,7 +107,7 @@ public class PersonalizedHomeFeed {
         }
         
         // Set initial personalized sections
-        personalizedSections.setValue(sections);
+        personalizedSections.postValue(sections);
         
         // Always fetch YouTube home feed and append to existing sections
         loadYouTubeHomeFeed();
@@ -157,41 +157,120 @@ public class PersonalizedHomeFeed {
     }
     
     /**
-     * Fetch related content for "Because you listened to X" sections.
+     * Fetch related content using artist browse ID for additional YouTube content.
      */
-    private void fetchRelatedContent(RecommendationSection rec, List<HomeSectionResult> sections) {
-        if (rec.getSeedVideoId() == null) return;
+    private void fetchRelatedContentWithArtistId(RecommendationSection rec) {
+        // Try artist ID first
+        String seedId = rec.getSeedArtistId();
         
-        InnertubeBridge.getRelatedContentAsync(rec.getSeedVideoId(), new HomePageCallback() {
-            @Override
-            public void onSuccess(@NonNull HomePageResult result) {
-                if (result.getSections() != null && !result.getSections().isEmpty()) {
-                    // Use the related songs section
-                    for (HomeSectionResult section : result.getSections()) {
-                        if (section.getTitle().contains("Song")) {
-                            // Create new section with custom title
-                            HomeSectionResult customSection = new HomeSectionResult(
-                                rec.getTitle(),
-                                section.getItems()
-                            );
-                            
-                            List<HomeSectionResult> current = personalizedSections.getValue();
-                            if (current != null) {
-                                List<HomeSectionResult> updated = new ArrayList<>(current);
-                                updated.add(customSection);
-                                personalizedSections.postValue(updated);
-                            }
-                            break;
+        // If no artist ID, try to extract from section title
+        if (seedId == null || seedId.isEmpty()) {
+            seedId = extractArtistFromTitle(rec.getTitle());
+        }
+        
+        if (seedId == null || seedId.isEmpty()) {
+            Log.d(TAG, "No artist ID available for section: " + rec.getTitle());
+            return;
+        }
+        
+        Log.d(TAG, "Fetching YouTube content with seed: " + seedId + " for section: " + rec.getTitle());
+        
+        // Check if seedId looks like a browse ID (starts with MP, UC, etc.) or is just a search term
+        if (seedId.startsWith("MP") || seedId.startsWith("UC") || seedId.startsWith("OLAK")) {
+            // Use browse API for valid browse IDs
+            InnertubeBridge.getRelatedContentAsync(seedId, new HomePageCallback() {
+                @Override
+                public void onSuccess(@NonNull HomePageResult result) {
+                    handleYouTubeContentSuccess(rec, result, "browse");
+                }
+                
+                @Override
+                public void onError(@NonNull BridgeException exception) {
+                    Log.d(TAG, "Could not fetch additional YouTube content for \"" + rec.getTitle() + "\": " + exception.getMessage());
+                }
+            });
+        } else {
+            // Use search API for artist names/song titles  
+            final String finalSeedId = seedId; // Make final for inner class
+            Log.d(TAG, "Using search API for: " + finalSeedId);
+            InnertubeBridge.searchAsync(finalSeedId + " artist", new SearchCallback() {
+                @Override
+                public void onSuccess(@NonNull SearchResult result) {
+                    // Convert search result to home page format for consistency
+                    if (result.getItems() != null && !result.getItems().isEmpty()) {
+                        Log.d(TAG, "Found " + result.getItems().size() + " search results for: " + finalSeedId);
+                        
+                        // Create a fake HomePageResult with search results
+                        List<HomeSectionResult> sections = new ArrayList<>();
+                        List<YTItemResult> searchItems = result.getItems();
+                        
+                        // Limit to first 10 results to avoid overwhelming
+                        if (searchItems.size() > 10) {
+                            searchItems = searchItems.subList(0, 10);
                         }
+                        
+                        sections.add(new HomeSectionResult("Related to " + finalSeedId, searchItems));
+                        
+                        HomePageResult fakeResult = new HomePageResult(sections, null, null);
+                        handleYouTubeContentSuccess(rec, fakeResult, "search");
+                    } else {
+                        Log.d(TAG, "No search results found for: " + finalSeedId);
+                    }
+                }
+                
+                @Override
+                public void onError(@NonNull BridgeException exception) {
+                    Log.d(TAG, "Search failed for \"" + finalSeedId + "\": " + exception.getMessage());
+                }
+            });
+        }
+    }
+    
+    /**
+     * Handle successful YouTube content fetch (both browse and search results).
+     */
+    private void handleYouTubeContentSuccess(RecommendationSection rec, HomePageResult result, String source) {
+        if (result.getSections() != null && !result.getSections().isEmpty()) {
+            Log.d(TAG, "Fetched additional YouTube content for: " + rec.getTitle() + " (via " + source + ")");
+            
+            // Find the existing section and append new items to it
+            List<HomeSectionResult> current = personalizedSections.getValue();
+            if (current != null) {
+                List<HomeSectionResult> updated = new ArrayList<>(current);
+                
+                // Find the existing section with matching title
+                for (int i = 0; i < updated.size(); i++) {
+                    HomeSectionResult existingSection = updated.get(i);
+                    if (existingSection.getTitle().equals(rec.getTitle())) {
+                        // Append additional songs from YouTube API
+                        List<YTItemResult> combinedItems = new ArrayList<>(existingSection.getItems());
+                        
+                        for (HomeSectionResult apiSection : result.getSections()) {
+                            if (apiSection.getTitle().contains("Song") || 
+                                apiSection.getTitle().contains("Related") ||
+                                apiSection.getTitle().contains("artist") ||
+                                source.equals("search")) {
+                                
+                                // Limit additional items to avoid overwhelming the section
+                                List<YTItemResult> additionalItems = apiSection.getItems();
+                                if (additionalItems.size() > 8) {
+                                    additionalItems = additionalItems.subList(0, 8);
+                                }
+                                
+                                combinedItems.addAll(additionalItems);
+                                break;
+                            }
+                        }
+                        
+                        // Update the section with combined items
+                        updated.set(i, new HomeSectionResult(rec.getTitle(), combinedItems));
+                        personalizedSections.postValue(updated);
+                        Log.d(TAG, "Enhanced \"" + rec.getTitle() + "\" with " + (combinedItems.size() - existingSection.getItems().size()) + " additional items");
+                        break;
                     }
                 }
             }
-            
-            @Override
-            public void onError(@NonNull BridgeException exception) {
-                Log.e(TAG, "Failed to fetch related content: " + exception.getMessage());
-            }
-        });
+        }
     }
     
     /**
@@ -350,6 +429,35 @@ public class PersonalizedHomeFeed {
                 Log.e(TAG, "Failed to fetch YouTube home feed: " + exception.getMessage());
             }
         });
+    }
+    
+    /**
+     * Extract artist name from section title for API lookups.
+     */
+    private String extractArtistFromTitle(String title) {
+        if (title == null || title.isEmpty()) {
+            return null;
+        }
+        
+        // Extract artist name from titles like "Because you listened to Artist Name"
+        if (title.startsWith("Because you listened to ")) {
+            String artistName = title.substring("Because you listened to ".length()).trim();
+            if (!artistName.isEmpty()) {
+                Log.d(TAG, "Extracted artist name: " + artistName);
+                return artistName; // Use artist name as search term
+            }
+        }
+        
+        // Extract from "Similar to Artist Name"
+        if (title.startsWith("Similar to ")) {
+            String artistName = title.substring("Similar to ".length()).trim();
+            if (!artistName.isEmpty()) {
+                Log.d(TAG, "Extracted similar artist: " + artistName);
+                return artistName;
+            }
+        }
+        
+        return null;
     }
     
     /**
