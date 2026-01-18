@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:id="@+id/home_feed_root"
-    android:background="@drawable/animated_gradient_bg">
+    >
 
     <!-- Main Content with NestedScrollView -->
     <androidx.core.widget.NestedScrollView

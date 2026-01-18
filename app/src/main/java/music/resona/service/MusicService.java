@@ -10,6 +10,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.graphics.Bitmap;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
 import android.os.Binder;
 import android.os.Build;
 import android.os.Handler;
@@ -46,6 +48,8 @@ import music.resona.manager.QueueManager;
 import music.resona.manager.QueuePersistence;
 import music.resona.models.Song;
 import music.resona.cache.StreamCache;
+import music.resona.database.QuickPicksDatabase;
+import music.resona.database.RecommendationDatabase;
 
 /**
  * Modern foreground service for background music playback using ExoPlayer2.
@@ -70,6 +74,20 @@ public class MusicService extends Service implements Player.Listener {
     private Bitmap currentAlbumArt;
     private final QueueManager queueManager = new QueueManager();
     private QueuePersistence queuePersistence;
+    private QuickPicksDatabase database;
+    private RecommendationDatabase recommendationDb;
+    
+    // Volume control
+    private float currentVolume = 1.0f;
+    
+    // Sleep timer
+    private Handler sleepTimerHandler;
+    private Runnable sleepTimerRunnable;
+    private long sleepTimerEndTime = 0;
+    
+    // Audio focus
+    private AudioManager audioManager;
+    private AudioFocusRequest audioFocusRequest;
     
     // State management
     private boolean isPlaying = false;
@@ -145,7 +163,16 @@ public class MusicService extends Service implements Player.Listener {
         Log.d(TAG, "MusicService created");
         
         createNotificationChannel();
+        
+        // Initialize audio manager for audio focus
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        
+        // Initialize sleep timer handler
+        sleepTimerHandler = new Handler(Looper.getMainLooper());
+        
         queuePersistence = new QueuePersistence(this);
+        database = QuickPicksDatabase.getInstance(this);
+        recommendationDb = RecommendationDatabase.getInstance(this);
         initializeMediaSession();
         initializeExoPlayer();
         registerBroadcastReceiver();
@@ -172,6 +199,12 @@ public class MusicService extends Service implements Player.Listener {
         
         saveQueueState();
         progressHandler.removeCallbacks(progressRunnable);
+        
+        // Cancel sleep timer
+        cancelSleepTimer();
+        
+        // Abandon audio focus
+        abandonAudioFocus();
         
         if (exoPlayer != null) {
             exoPlayer.removeListener(this);
@@ -260,6 +293,31 @@ public class MusicService extends Service implements Player.Listener {
     @Override
     public void onIsPlayingChanged(boolean isPlayingNow) {
         isPlaying = isPlayingNow;
+        
+        // Record playback start in database for personalization
+        if (isPlayingNow && queueManager.getCurrentSong() != null) {
+            Song currentSong = queueManager.getCurrentSong();
+            songStartTime = System.currentTimeMillis();
+            lastTrackedPosition = 0;
+            
+            // Record song in database with play event
+            new Thread(() -> {
+                try {
+                    database.insertOrUpdateSong(
+                        currentSong.getVideoId(),
+                        currentSong.getTitle(),
+                        currentSong.getArtist(),
+                        "", // artistId - we don't have it here
+                        currentSong.getThumbnailUrl(),
+                        currentSong.getDurationSeconds()
+                    );
+                    Log.d(TAG, "Recorded song in database: " + currentSong.getTitle());
+                } catch (Exception e) {
+                    Log.e(TAG, "Failed to record song in database", e);
+                }
+            }).start();
+        }
+        
         updateNotification();
         notifyPlaybackStateChanged();
     }
@@ -387,6 +445,7 @@ public class MusicService extends Service implements Player.Listener {
     
     public void play() {
         if (exoPlayer != null) {
+            requestAudioFocus();
             exoPlayer.setPlayWhenReady(true);
             startForeground(NOTIFICATION_ID, buildNotification());
         }
@@ -395,6 +454,7 @@ public class MusicService extends Service implements Player.Listener {
     public void pause() {
         if (exoPlayer != null) {
             exoPlayer.setPlayWhenReady(false);
+            abandonAudioFocus();
         }
     }
     
@@ -409,7 +469,23 @@ public class MusicService extends Service implements Player.Listener {
         }
         
         if (queueManager.hasNext()) {
+            // Track song transition for recommendations
+            Song currentSong = queueManager.getCurrentSong();
             queueManager.moveToNext();
+            Song nextSong = queueManager.getCurrentSong();
+            
+            if (currentSong != null && nextSong != null) {
+                // Record relationship between consecutive songs
+                executor.execute(() -> {
+                    try {
+                        database.recordSongRelationship(currentSong.getVideoId(), nextSong.getVideoId());
+                        Log.d(TAG, "Recorded song transition: " + currentSong.getTitle() + " → " + nextSong.getTitle());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Failed to record song relationship", e);
+                    }
+                });
+            }
+            
             playCurrent();
         }
     }
@@ -425,6 +501,27 @@ public class MusicService extends Service implements Player.Listener {
         if (exoPlayer != null) {
             exoPlayer.seekTo(positionMs);
         }
+    }
+    
+    // Volume Control
+    public void setVolume(float volume) {
+        currentVolume = Math.max(0f, Math.min(1f, volume)); // Clamp between 0 and 1
+        if (exoPlayer != null) {
+            exoPlayer.setVolume(currentVolume);
+        }
+        Log.d(TAG, "Volume set to: " + currentVolume);
+    }
+    
+    public float getVolume() {
+        return currentVolume;
+    }
+    
+    public void increaseVolume() {
+        setVolume(currentVolume + 0.1f);
+    }
+    
+    public void decreaseVolume() {
+        setVolume(currentVolume - 0.1f);
     }
     
     // Queue Management
@@ -456,6 +553,39 @@ public class MusicService extends Service implements Player.Listener {
         if (queueManager.removeAt(position)) {
             notifyQueueChanged();
         }
+    }
+    
+    // Play Next - Insert after current song
+    public void playNext(Song song) {
+        queueManager.addNext(song);
+        notifyQueueChanged();
+        Log.d(TAG, "Added song to play next: " + song.getTitle());
+    }
+    
+    public void playNext(List<Song> songs) {
+        if (songs == null || songs.isEmpty()) return;
+        // Add in reverse order so they appear in correct order after current
+        for (int i = songs.size() - 1; i >= 0; i--) {
+            queueManager.addNext(songs.get(i));
+        }
+        notifyQueueChanged();
+        Log.d(TAG, "Added " + songs.size() + " songs to play next");
+    }
+    
+    // Add to Queue - Append to end
+    public void addToQueue(Song song) {
+        List<Song> singleSong = new ArrayList<>();
+        singleSong.add(song);
+        queueManager.addToQueue(singleSong);
+        notifyQueueChanged();
+        Log.d(TAG, "Added song to queue: " + song.getTitle());
+    }
+    
+    public void addToQueue(List<Song> songs) {
+        if (songs == null || songs.isEmpty()) return;
+        queueManager.addToQueue(songs);
+        notifyQueueChanged();
+        Log.d(TAG, "Added " + songs.size() + " songs to queue");
     }
     
     public boolean isPreparing() {
@@ -549,6 +679,9 @@ public class MusicService extends Service implements Player.Listener {
                 trackSongCompletion(currentSong, getCurrentPosition(), getDuration());
             }
         }
+        
+        // Check if we need to auto-load more songs
+        checkAndAutoLoadMore();
         
         if (repeatMode == RepeatMode.ONE) {
             // Replay current song
@@ -817,8 +950,38 @@ public class MusicService extends Service implements Player.Listener {
     private void trackSongCompletion(Song song, int position, int duration) {
         try {
             executor.execute(() -> {
-                // Note: Analytics tracking disabled - implement PersonalizedHomeFeed if needed
-                Log.d(TAG, "Tracked completion: " + song.getTitle());
+                try {
+                    // Record song in database for personalized recommendations
+                    database.insertOrUpdateSong(
+                        song.getVideoId(),
+                        song.getTitle(),
+                        song.getArtist(),
+                        "", // artistId - not available in Song model
+                        song.getThumbnailUrl(),
+                        song.getDurationSeconds()
+                    );
+                    
+                    // Record play event (significant listening = 80% completion)
+                    database.recordPlayEvent(song.getVideoId(), position);
+                    
+                    // Also record to RecommendationDatabase for advanced features
+                    float completionRate = duration > 0 ? (float) position / duration : 0f;
+                    recommendationDb.recordPlay(
+                        song.getVideoId(),
+                        song.getTitle(),
+                        song.getArtist(),
+                        "", // artistId - not available in Song model
+                        song.getAlbum(),
+                        "", // albumId - not available in Song model
+                        song.getThumbnailUrl(),
+                        position,
+                        completionRate
+                    );
+                    
+                    Log.d(TAG, "Recorded song to databases: " + song.getTitle() + " at " + position + "ms (" + (int)(completionRate * 100) + "% complete)");
+                } catch (Exception e) {
+                    Log.e(TAG, "Error recording to database", e);
+                }
             });
         } catch (Exception e) {
             Log.e(TAG, "Error tracking song completion", e);
@@ -932,6 +1095,237 @@ public class MusicService extends Service implements Player.Listener {
     
     private void notifyLoadingStateChanged(boolean loading) {
         // Only notify PlaybackListener instances
+    }
+    
+    // Auto-load More Songs
+    private void checkAndAutoLoadMore() {
+        List<Song> queue = queueManager.getActiveQueue();
+        int currentIndex = queueManager.getCurrentIndex();
+        int songsRemaining = queue.size() - currentIndex - 1;
+        
+        if (songsRemaining < 5) {
+            Log.d(TAG, "Queue running low (" + songsRemaining + " songs remaining), consider loading more");
+            // Listeners can implement this to load more songs
+            for (MusicServiceListener listener : listeners) {
+                if (listener instanceof AutoLoadListener) {
+                    ((AutoLoadListener) listener).onNeedMoreSongs(songsRemaining);
+                }
+            }
+        }
+    }
+    
+    public interface AutoLoadListener extends MusicServiceListener {
+        void onNeedMoreSongs(int songsRemaining);
+    }
+    
+    // Sleep Timer
+    public void setSleepTimer(long durationMs) {
+        cancelSleepTimer();
+        sleepTimerEndTime = System.currentTimeMillis() + durationMs;
+        
+        sleepTimerRunnable = new Runnable() {
+            @Override
+            public void run() {
+                Log.d(TAG, "Sleep timer expired - pausing playback");
+                pause();
+                sleepTimerEndTime = 0;
+                for (MusicServiceListener listener : listeners) {
+                    if (listener instanceof SleepTimerListener) {
+                        ((SleepTimerListener) listener).onSleepTimerExpired();
+                    }
+                }
+            }
+        };
+        
+        sleepTimerHandler.postDelayed(sleepTimerRunnable, durationMs);
+        Log.d(TAG, "Sleep timer set for " + (durationMs / 60000) + " minutes");
+        
+        for (MusicServiceListener listener : listeners) {
+            if (listener instanceof SleepTimerListener) {
+                ((SleepTimerListener) listener).onSleepTimerSet(sleepTimerEndTime);
+            }
+        }
+    }
+    
+    public void cancelSleepTimer() {
+        if (sleepTimerRunnable != null) {
+            sleepTimerHandler.removeCallbacks(sleepTimerRunnable);
+            sleepTimerRunnable = null;
+            sleepTimerEndTime = 0;
+            Log.d(TAG, "Sleep timer cancelled");
+            
+            for (MusicServiceListener listener : listeners) {
+                if (listener instanceof SleepTimerListener) {
+                    ((SleepTimerListener) listener).onSleepTimerCancelled();
+                }
+            }
+        }
+    }
+    
+    public long getSleepTimerEndTime() {
+        return sleepTimerEndTime;
+    }
+    
+    public boolean isSleepTimerActive() {
+        return sleepTimerEndTime > 0;
+    }
+    
+    public interface SleepTimerListener extends MusicServiceListener {
+        void onSleepTimerSet(long endTime);
+        void onSleepTimerExpired();
+        void onSleepTimerCancelled();
+    }
+    
+    // Audio Focus Management
+    private void requestAudioFocus() {
+        if (audioManager == null) return;
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            android.media.AudioAttributes audioAttributes = new android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
+                .build();
+            
+            audioFocusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                .setAudioAttributes(audioAttributes)
+                .setAcceptsDelayedFocusGain(true)
+                .setOnAudioFocusChangeListener(new AudioManager.OnAudioFocusChangeListener() {
+                    @Override
+                    public void onAudioFocusChange(int focusChange) {
+                        handleAudioFocusChange(focusChange);
+                    }
+                })
+                .build();
+            
+            int result = audioManager.requestAudioFocus(audioFocusRequest);
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                Log.d(TAG, "Audio focus granted");
+            }
+        } else {
+            int result = audioManager.requestAudioFocus(
+                new AudioManager.OnAudioFocusChangeListener() {
+                    @Override
+                    public void onAudioFocusChange(int focusChange) {
+                        handleAudioFocusChange(focusChange);
+                    }
+                },
+                AudioManager.STREAM_MUSIC,
+                AudioManager.AUDIOFOCUS_GAIN
+            );
+            
+            if (result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED) {
+                Log.d(TAG, "Audio focus granted");
+            }
+        }
+    }
+    
+    private void abandonAudioFocus() {
+        if (audioManager == null) return;
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && audioFocusRequest != null) {
+            audioManager.abandonAudioFocusRequest(audioFocusRequest);
+        }
+        Log.d(TAG, "Audio focus abandoned");
+    }
+    
+    private void handleAudioFocusChange(int focusChange) {
+        switch (focusChange) {
+            case AudioManager.AUDIOFOCUS_GAIN:
+                Log.d(TAG, "Audio focus gained");
+                if (!isPlaying) {
+                    play();
+                }
+                setVolume(currentVolume);
+                break;
+            
+            case AudioManager.AUDIOFOCUS_LOSS:
+                Log.d(TAG, "Audio focus lost");
+                pause();
+                break;
+            
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                Log.d(TAG, "Audio focus lost transient");
+                pause();
+                break;
+            
+            case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                Log.d(TAG, "Audio focus lost transient can duck");
+                setVolume(currentVolume * 0.2f); // Duck to 20% volume
+                break;
+        }
+    }
+    
+    // Skip Silence
+    public void setSkipSilenceEnabled(boolean enabled) {
+        if (exoPlayer != null) {
+            exoPlayer.setSkipSilenceEnabled(enabled);
+            Log.d(TAG, "Skip silence " + (enabled ? "enabled" : "disabled"));
+        }
+    }
+    
+    public boolean isSkipSilenceEnabled() {
+        return exoPlayer != null && exoPlayer.getSkipSilenceEnabled();
+    }
+    
+    // Like/Dislike functionality
+    public void likeSong(Song song) {
+        if (song == null) return;
+        executor.execute(() -> {
+            try {
+                recommendationDb.likeSong(song.getVideoId());
+                Log.d(TAG, "Liked song: " + song.getTitle());
+                
+                for (MusicServiceListener listener : listeners) {
+                    if (listener instanceof LikeListener) {
+                        runOnUiThread(() -> ((LikeListener) listener).onSongLiked(song));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error liking song", e);
+            }
+        });
+    }
+    
+    public void dislikeSong(Song song) {
+        if (song == null) return;
+        executor.execute(() -> {
+            try {
+                recommendationDb.dislikeSong(song.getVideoId());
+                Log.d(TAG, "Disliked song: " + song.getTitle());
+                
+                for (MusicServiceListener listener : listeners) {
+                    if (listener instanceof LikeListener) {
+                        runOnUiThread(() -> ((LikeListener) listener).onSongDisliked(song));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error disliking song", e);
+            }
+        });
+    }
+    
+    public void unlikeSong(Song song) {
+        if (song == null) return;
+        executor.execute(() -> {
+            try {
+                recommendationDb.unlikeSong(song.getVideoId());
+                Log.d(TAG, "Unliked song: " + song.getTitle());
+                
+                for (MusicServiceListener listener : listeners) {
+                    if (listener instanceof LikeListener) {
+                        runOnUiThread(() -> ((LikeListener) listener).onSongUnliked(song));
+                    }
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error unliking song", e);
+            }
+        });
+    }
+    
+    public interface LikeListener extends MusicServiceListener {
+        void onSongLiked(Song song);
+        void onSongDisliked(Song song);
+        void onSongUnliked(Song song);
     }
     
     // Utility Methods

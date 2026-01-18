@@ -71,6 +71,12 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
     private ImageView repeatButton;
     private ProgressBar loadingIndicator;
     private View dragHandle;
+    private ImageView likeButton;
+    private ImageView dislikeButton;
+    private ImageView volumeButton;
+    private SeekBar volumeSeekBar;
+    private ImageView sleepTimerButton;
+    private ImageView skipSilenceButton;
     
     // State
     private MusicPlaybackManager playbackManager;
@@ -380,21 +386,68 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
         artistName.setSingleLine(true);
         artistName.setPadding(0, dp(2), 0, 0);
         UiUXUtil.typeface(this, artistName, "medium.ttf", Typeface.NORMAL);
+        // Make artist name clickable for navigation
+        artistName.setOnClickListener(v -> {
+            if (playbackManager != null && playbackManager.getCurrentSong() != null) {
+                String artist = playbackManager.getCurrentSong().getArtist();
+                if (artist != null && !artist.isEmpty()) {
+                    Toast.makeText(this, "Opening artist: " + artist, Toast.LENGTH_SHORT).show();
+                    // TODO: Navigate to artist page
+                }
+            }
+        });
         textContainer.addView(artistName);
         
         infoLayout.addView(textContainer, new LinearLayout.LayoutParams(
             0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         ));
         
+        // Like/Dislike buttons container
+        LinearLayout ratingContainer = new LinearLayout(this);
+        ratingContainer.setOrientation(LinearLayout.HORIZONTAL);
+        
         // Like button
-        ImageView likeButton = new ImageView(this);
+        likeButton = new ImageView(this);
         likeButton.setImageResource(android.R.drawable.star_off);
         likeButton.setColorFilter(Color.WHITE);
-        likeButton.setAlpha(0.8f);
-        likeButton.setPadding(dp(8), dp(8), dp(8), dp(8));
-        LinearLayout.LayoutParams likeParams = new LinearLayout.LayoutParams(dp(40), dp(40));
-        likeParams.setMargins(dp(12), 0, 0, 0);
-        infoLayout.addView(likeButton, likeParams);
+        likeButton.setAlpha(0.6f);
+        likeButton.setPadding(dp(6), dp(6), dp(6), dp(6));
+        likeButton.setOnClickListener(v -> {
+            if (playbackManager != null && playbackManager.getCurrentSong() != null) {
+                MusicService service = playbackManager.getMusicService();
+                if (service != null) {
+                    service.likeSong(playbackManager.getCurrentSong());
+                    Toast.makeText(this, "Liked ❤️", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        ratingContainer.addView(likeButton, new LinearLayout.LayoutParams(dp(36), dp(36)));
+        
+        // Dislike button
+        dislikeButton = new ImageView(this);
+        dislikeButton.setImageResource(android.R.drawable.ic_delete);
+        dislikeButton.setColorFilter(Color.WHITE);
+        dislikeButton.setAlpha(0.6f);
+        dislikeButton.setPadding(dp(6), dp(6), dp(6), dp(6));
+        LinearLayout.LayoutParams dislikeParams = new LinearLayout.LayoutParams(dp(36), dp(36));
+        dislikeParams.setMargins(dp(8), 0, 0, 0);
+        dislikeButton.setOnClickListener(v -> {
+            if (playbackManager != null && playbackManager.getCurrentSong() != null) {
+                MusicService service = playbackManager.getMusicService();
+                if (service != null) {
+                    service.dislikeSong(playbackManager.getCurrentSong());
+                    Toast.makeText(this, "Disliked 👎", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        ratingContainer.addView(dislikeButton, dislikeParams);
+        
+        LinearLayout.LayoutParams ratingParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT, 
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        ratingParams.setMargins(dp(12), 0, 0, 0);
+        infoLayout.addView(ratingContainer, ratingParams);
         
         parent.addView(infoLayout);
     }
@@ -538,14 +591,21 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
         View spacer1 = new View(this);
         additionalRow.addView(spacer1, new LinearLayout.LayoutParams(0, 0, 1f));
         
-        // Lyrics
-        ImageView lyricsButton = createIconButton(android.R.drawable.ic_menu_edit, dp(40));
-        lyricsButton.setAlpha(0.6f);
-        additionalRow.addView(lyricsButton);
+        // Volume
+        volumeButton = createIconButton(android.R.drawable.ic_lock_silent_mode_off, dp(40));
+        volumeButton.setAlpha(0.6f);
+        volumeButton.setOnClickListener(v -> showVolumeControl());
+        additionalRow.addView(volumeButton);
         
         // Spacer
-        View spacer2 = new View(this);
-        additionalRow.addView(spacer2, new LinearLayout.LayoutParams(0, 0, 1f));
+        View spacer2a = new View(this);
+        additionalRow.addView(spacer2a, new LinearLayout.LayoutParams(0, 0, 0.5f));
+        
+        // Sleep Timer
+        sleepTimerButton = createIconButton(android.R.drawable.ic_lock_idle_alarm, dp(40));
+        sleepTimerButton.setAlpha(0.6f);
+        sleepTimerButton.setOnClickListener(v -> showSleepTimerDialog());
+        additionalRow.addView(sleepTimerButton);
         
         // Queue
         ImageView queueButton = createIconButton(R.drawable.queue, dp(40));
@@ -827,6 +887,155 @@ public class FullScreenPlayerActivity extends Activity implements MusicPlaybackM
      * Show bottom sheet with current queue.
      */
     private void showQueueBottomSheet() {
+        if (playbackManager != null) {
+            MusicService service = playbackManager.getMusicService();
+            if (service != null) {
+                List<Song> queue = service.getQueue();
+                int currentIndex = service.getCurrentIndex();
+                
+                QueueBottomSheet queueSheet = new QueueBottomSheet(this, queue, currentIndex, 
+                    new QueueBottomSheet.OnQueueItemClickListener() {
+                        @Override
+                        public void onSongClick(int position) {
+                            if (playbackManager != null) {
+                                MusicService svc = playbackManager.getMusicService();
+                                if (svc != null) {
+                                    svc.skipToPosition(position);
+                                }
+                            }
+                        }
+                        
+                        @Override
+                        public void onRemoveClick(int position) {
+                            if (playbackManager != null) {
+                                MusicService svc = playbackManager.getMusicService();
+                                if (svc != null) {
+                                    svc.removeFromQueue(position);
+                                }
+                            }
+                        }
+                    });
+                queueSheet.show();
+            }
+        }
+    }
+    
+    /**
+     * Show volume control dialog.
+     */
+    private void showVolumeControl() {
+        if (playbackManager == null) return;
+        
+        MusicService service = playbackManager.getMusicService();
+        if (service == null) return;
+        
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        View volumeView = new LinearLayout(this);
+        LinearLayout volumeLayout = (LinearLayout) volumeView;
+        volumeLayout.setOrientation(LinearLayout.VERTICAL);
+        volumeLayout.setPadding(dp(24), dp(16), dp(24), dp(16));
+        
+        TextView volumeLabel = new TextView(this);
+        volumeLabel.setText("Volume");
+        volumeLabel.setTextSize(16);
+        volumeLabel.setTextColor(Color.BLACK);
+        volumeLayout.addView(volumeLabel);
+        
+        SeekBar volumeBar = new SeekBar(this);
+        volumeBar.setMax(100);
+        volumeBar.setProgress((int)(service.getVolume() * 100));
+        LinearLayout.LayoutParams seekParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        seekParams.topMargin = dp(8);
+        volumeLayout.addView(volumeBar, seekParams);
+        
+        TextView volumeText = new TextView(this);
+        volumeText.setText((int)(service.getVolume() * 100) +"%");
+        volumeText.setTextSize(14);
+        volumeText.setTextColor(0xFF666666);
+        volumeText.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        );
+        textParams.topMargin = dp(8);
+        volumeLayout.addView(volumeText, textParams);
+        
+        volumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override
+            public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                if (fromUser) {
+                    service.setVolume(progress / 100f);
+                    volumeText.setText(progress + "%");
+                }
+            }
+            @Override
+            public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override
+            public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        
+        builder.setView(volumeView);
+        builder.setPositiveButton("Done", null);
+        builder.show();
+    }
+    
+    /**
+     * Show sleep timer dialog.
+     */
+    private void showSleepTimerDialog() {
+        if (playbackManager == null) return;
+        
+        MusicService service = playbackManager.getMusicService();
+        if (service == null) return;
+        
+        String[] options = {"15 minutes", "30 minutes", "45 minutes", "1 hour", "Cancel timer"};
+        
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Sleep Timer");
+        builder.setItems(options, (dialog, which) -> {
+            switch (which) {
+                case 0:
+                    service.setSleepTimer(15 * 60 * 1000);
+                    Toast.makeText(this, "Sleep timer: 15 minutes", Toast.LENGTH_SHORT).show();
+                    sleepTimerButton.setColorFilter(0xFF1DB954);
+                    sleepTimerButton.setAlpha(1.0f);
+                    break;
+                case 1:
+                    service.setSleepTimer(30 * 60 * 1000);
+                    Toast.makeText(this, "Sleep timer: 30 minutes", Toast.LENGTH_SHORT).show();
+                    sleepTimerButton.setColorFilter(0xFF1DB954);
+                    sleepTimerButton.setAlpha(1.0f);
+                    break;
+                case 2:
+                    service.setSleepTimer(45 * 60 * 1000);
+                    Toast.makeText(this, "Sleep timer: 45 minutes", Toast.LENGTH_SHORT).show();
+                    sleepTimerButton.setColorFilter(0xFF1DB954);
+                    sleepTimerButton.setAlpha(1.0f);
+                    break;
+                case 3:
+                    service.setSleepTimer(60 * 60 * 1000);
+                    Toast.makeText(this, "Sleep timer: 1 hour", Toast.LENGTH_SHORT).show();
+                    sleepTimerButton.setColorFilter(0xFF1DB954);
+                    sleepTimerButton.setAlpha(1.0f);
+                    break;
+                case 4:
+                    service.cancelSleepTimer();
+                    Toast.makeText(this, "Sleep timer cancelled", Toast.LENGTH_SHORT).show();
+                    sleepTimerButton.setColorFilter(Color.WHITE);
+                    sleepTimerButton.setAlpha(0.6f);
+                    break;
+            }
+        });
+        builder.show();
+    }
+    
+    /**
+     * Show bottom sheet with current queue.
+     */
+    private void showQueueBottomSheet_OLD() {
         if (playbackManager == null) return;
         
         List<Song> queueSongs = playbackManager.getQueue();

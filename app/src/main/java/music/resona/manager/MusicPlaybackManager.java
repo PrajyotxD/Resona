@@ -216,6 +216,14 @@ public class MusicPlaybackManager {
     }
     
     /**
+     * Get the underlying MusicService instance.
+     * @return MusicService if bound, null otherwise
+     */
+    public MusicService getMusicService() {
+        return musicService;
+    }
+    
+    /**
      * Play a single song using StreamCache for instant playback.
      * Uses LRU cache with 10-minute TTL and LOW quality for speed.
      */

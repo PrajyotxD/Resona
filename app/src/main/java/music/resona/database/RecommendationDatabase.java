@@ -24,6 +24,8 @@ public class RecommendationDatabase {
     private static final String KEY_LISTENING_HISTORY = "listening_history";
     private static final String KEY_RELATIONSHIPS = "content_relationships";
     private static final String KEY_FAVORITE_ARTISTS = "favorite_artists";
+    private static final String KEY_LIKED_SONGS = "liked_songs";
+    private static final String KEY_DISLIKED_SONGS = "disliked_songs";
     
     private final SharedPreferences prefs;
     private final Gson gson;
@@ -32,6 +34,8 @@ public class RecommendationDatabase {
     private final Map<String, ListeningHistory> listeningHistoryMap;
     private final Map<String, ContentRelationship> relationshipsMap;
     private final Set<String> favoriteArtists;
+    private final Set<String> likedSongs;
+    private final Set<String> dislikedSongs;
     
     private static RecommendationDatabase instance;
     
@@ -43,6 +47,8 @@ public class RecommendationDatabase {
         this.listeningHistoryMap = new ConcurrentHashMap<>();
         this.relationshipsMap = new ConcurrentHashMap<>();
         this.favoriteArtists = ConcurrentHashMap.newKeySet();
+        this.likedSongs = ConcurrentHashMap.newKeySet();
+        this.dislikedSongs = ConcurrentHashMap.newKeySet();
         
         loadData();
     }
@@ -322,6 +328,24 @@ public class RecommendationDatabase {
                 favoriteArtists.addAll(favSet);
             }
             
+            // Load liked songs
+            String likedJson = prefs.getString(KEY_LIKED_SONGS, "[]");
+            Type likedType = new TypeToken<Set<String>>(){}.getType();
+            Set<String> likedSet = gson.fromJson(likedJson, likedType);
+            
+            if (likedSet != null) {
+                likedSongs.addAll(likedSet);
+            }
+            
+            // Load disliked songs
+            String dislikedJson = prefs.getString(KEY_DISLIKED_SONGS, "[]");
+            Type dislikedType = new TypeToken<Set<String>>(){}.getType();
+            Set<String> dislikedSet = gson.fromJson(dislikedJson, dislikedType);
+            
+            if (dislikedSet != null) {
+                dislikedSongs.addAll(dislikedSet);
+            }
+            
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -348,6 +372,17 @@ public class RecommendationDatabase {
         }
     }
     
+    private void saveLikeData() {
+        try {
+            SharedPreferences.Editor editor = prefs.edit();
+            editor.putString(KEY_LIKED_SONGS, gson.toJson(likedSongs));
+            editor.putString(KEY_DISLIKED_SONGS, gson.toJson(dislikedSongs));
+            editor.apply();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+    
     /**
      * Clear all data (for testing or reset).
      */
@@ -355,6 +390,68 @@ public class RecommendationDatabase {
         listeningHistoryMap.clear();
         relationshipsMap.clear();
         favoriteArtists.clear();
+        likedSongs.clear();
+        dislikedSongs.clear();
         prefs.edit().clear().apply();
+    }
+    
+    // ==================== Like/Dislike System ====================
+    
+    /**
+     * Like a song.
+     */
+    public void likeSong(@NonNull String videoId) {
+        likedSongs.add(videoId);
+        dislikedSongs.remove(videoId); // Remove from dislikes if present
+        saveLikeData();
+        Log.d("RecommendationDB", "Liked song: " + videoId);
+    }
+    
+    /**
+     * Dislike a song.
+     */
+    public void dislikeSong(@NonNull String videoId) {
+        dislikedSongs.add(videoId);
+        likedSongs.remove(videoId); // Remove from likes if present
+        saveLikeData();
+        Log.d("RecommendationDB", "Disliked song: " + videoId);
+    }
+    
+    /**
+     * Remove like/dislike status.
+     */
+    public void unlikeSong(@NonNull String videoId) {
+        likedSongs.remove(videoId);
+        dislikedSongs.remove(videoId);
+        saveLikeData();
+        Log.d("RecommendationDB", "Unliked song: " + videoId);
+    }
+    
+    /**
+     * Check if a song is liked.
+     */
+    public boolean isLiked(@NonNull String videoId) {
+        return likedSongs.contains(videoId);
+    }
+    
+    /**
+     * Check if a song is disliked.
+     */
+    public boolean isDisliked(@NonNull String videoId) {
+        return dislikedSongs.contains(videoId);
+    }
+    
+    /**
+     * Get all liked song IDs.
+     */
+    public Set<String> getLikedSongs() {
+        return new HashSet<>(likedSongs);
+    }
+    
+    /**
+     * Get all disliked song IDs.
+     */
+    public Set<String> getDislikedSongs() {
+        return new HashSet<>(dislikedSongs);
     }
 }
