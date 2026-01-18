@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_bottom_sheet"
+    android:paddingTop="16dp"
+    android:paddingBottom="24dp">
+
+    <!-- Header -->
+    <RelativeLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingBottom="16dp">
+
+        <TextView
+            android:id="@+id/bottom_sheet_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@+id/btn_close"
+            android:text="Save to playlist"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <ImageView
+            android:id="@+id/btn_close"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:padding="8dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="#FFFFFF"
+            android:background="?attr/selectableItemBackgroundBorderless" />
+
+    </RelativeLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#2A2A2A"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Create New Playlist -->
+    <LinearLayout
+        android:id="@+id/option_create_new"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="16dp"
+        android:paddingBottom="16dp"
+        android:gravity="center_vertical"
+        android:background="?attr/selectableItemBackground">
+
+        <ImageView
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:padding="12dp"
+            android:src="@drawable/add"
+            android:tint="#FFFFFF"
+            android:background="@drawable/bg_circle"
+            android:backgroundTint="#2A2A2A" />
+
+        <TextView
+            android:id="@+id/txt_create_new"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:text="Create new playlist"
+            android:textColor="#FFFFFF"
+            android:textSize="15sp" />
+
+    </LinearLayout>
+
+    <!-- Divider -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#2A2A2A"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp" />
+
+    <!-- Loading Indicator -->
+    <ProgressBar
+        android:id="@+id/loading_playlists"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_gravity="center"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="24dp"
+        android:indeterminateTint="#1DB954"
+        android:visibility="gone" />
+
+    <!-- No Playlists Message -->
+    <TextView
+        android:id="@+id/txt_no_playlists"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_marginTop="24dp"
+        android:layout_marginBottom="24dp"
+        android:text="No playlists found"
+        android:textColor="#B3B3B3"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+    <!-- User's Playlists List -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_playlists"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="300dp"
+        android:visibility="gone" />
+
+</LinearLayout>

@@ -106,6 +106,7 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
     // Song data
     private List<SongItem> allSongs = new ArrayList<>();
     private List<SongItem> filteredSongs = new ArrayList<>();
+    private boolean isPlaylistEditable = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -333,8 +334,16 @@ public class Vibe extends AppCompatActivity implements SongsAdapter.OnSongClickL
         });
         
         btnEdit.setOnClickListener(v -> {
-            android.util.Log.d("Vibe", "Edit clicked");
-            Toast.makeText(this, "Edit playlist", Toast.LENGTH_SHORT).show();
+            if (isPlaylistEditable) {
+                android.util.Log.d("Vibe", "Edit clicked");
+                // TODO: Implement edit playlist functionality
+                // Available operations: add songs, remove songs
+                Toast.makeText(this, "Edit playlist (coming soon)", Toast.LENGTH_SHORT).show();
+            } else {
+                android.util.Log.d("Vibe", "Save clicked");
+                // Show save to playlist bottom sheet
+                showSaveToPlaylistBottomSheet();
+            }
         });
         
         btnMore.setOnClickListener(v -> {
@@ -509,11 +518,24 @@ private int parseDuration(String duration) {
     private void parsePlaylistResult(PlaylistResult playlist) {
         allSongs.clear();
         
+        // Store editable status
+        isPlaylistEditable = playlist.getEditable();
+        
         android.util.Log.d("Vibe", "Playlist: " + playlist.getTitle() + ", songs: " + playlist.getSongs().size());
         android.util.Log.d("Vibe", "Song count: " + playlist.getSongCount() + ", duration: " + playlist.getDuration());
+        android.util.Log.d("Vibe", "Playlist editable: " + isPlaylistEditable);
         
         // Update UI with playlist info
         playlistTitle.setText(playlist.getTitle());
+        
+        // Show edit button for editable playlists, save button for non-editable
+        btnEdit.setVisibility(View.VISIBLE);
+        // Change icon based on editable status
+        if (isPlaylistEditable) {
+            btnEdit.setImageResource(R.drawable.edit); // Edit icon
+        } else {
+            btnEdit.setImageResource(R.drawable.library_add); // Save icon
+        }
         
         // Parse songs
         for (YTItemResult item : playlist.getSongs()) {
@@ -674,7 +696,8 @@ private int parseDuration(String duration) {
         }
         
         int songCount = allSongs.size();
-        sheetSubtitle.setText("YouTube Music • " + songCount + (songCount == 1 ? " song" : " songs"));
+        String playlistType = isPlaylistEditable ? "Your Playlist" : "YouTube Music";
+        sheetSubtitle.setText(playlistType + " • " + songCount + (songCount == 1 ? " song" : " songs"));
         
         // Apply typefaces
         music.resona.utils.UiUXUtil.typeface(this, sheetTitle, "akatski.ttf", android.graphics.Typeface.NORMAL);
@@ -711,47 +734,285 @@ private int parseDuration(String duration) {
         // Option click listeners
         LinearLayout optionShufflePlay = bottomSheetView.findViewById(R.id.option_shuffle_play);
         optionShufflePlay.setOnClickListener(v -> {
-            Toast.makeText(this, "Shuffle play", Toast.LENGTH_SHORT).show();
+            if (!allSongs.isEmpty()) {
+                List<Song> songList = convertToSongList(allSongs);
+                // Shuffle the list
+                java.util.Collections.shuffle(songList);
+                playbackManager.playQueue(songList, 0, null);
+                Toast.makeText(this, "Shuffling " + allSongs.size() + " songs", Toast.LENGTH_SHORT).show();
+                android.util.Log.d("Vibe", "Shuffle play: " + allSongs.size() + " songs");
+            } else {
+                Toast.makeText(this, "No songs to shuffle", Toast.LENGTH_SHORT).show();
+            }
             bottomSheet.dismiss();
         });
         
         LinearLayout optionFindInPlaylist = bottomSheetView.findViewById(R.id.option_find_in_playlist);
         optionFindInPlaylist.setOnClickListener(v -> {
-            Toast.makeText(this, "Find in playlist", Toast.LENGTH_SHORT).show();
             bottomSheet.dismiss();
+            // Show the search bar
+            showSearchBar();
         });
         
         LinearLayout optionStartMix = bottomSheetView.findViewById(R.id.option_start_mix);
         optionStartMix.setOnClickListener(v -> {
-            Toast.makeText(this, "Start mix", Toast.LENGTH_SHORT).show();
+            if (!allSongs.isEmpty()) {
+                // Start radio based on the first song in the playlist
+                SongItem firstSong = allSongs.get(0);
+                Song seedSong = new Song(
+                    firstSong.getVideoId(),
+                    firstSong.getTitle(),
+                    firstSong.getArtist(),
+                    firstSong.getAlbumTitle(),
+                    firstSong.getThumbnailUrl(),
+                    parseDuration(firstSong.getDuration())
+                );
+                playbackManager.playRadio(seedSong, null);
+                Toast.makeText(this, "Starting mix based on " + firstSong.getTitle(), Toast.LENGTH_SHORT).show();
+                android.util.Log.d("Vibe", "Start mix from: " + firstSong.getTitle());
+            } else {
+                Toast.makeText(this, "No songs available", Toast.LENGTH_SHORT).show();
+            }
             bottomSheet.dismiss();
         });
         
         LinearLayout optionPlayNext = bottomSheetView.findViewById(R.id.option_play_next);
         optionPlayNext.setOnClickListener(v -> {
-            Toast.makeText(this, "Play next", Toast.LENGTH_SHORT).show();
+            if (!allSongs.isEmpty()) {
+                List<Song> songList = convertToSongList(allSongs);
+                // Add songs to play next (after current song)
+                for (Song song : songList) {
+                    playbackManager.addNext(song);
+                }
+                Toast.makeText(this, "Added " + allSongs.size() + " songs to play next", Toast.LENGTH_SHORT).show();
+                android.util.Log.d("Vibe", "Play next: " + allSongs.size() + " songs");
+            } else {
+                Toast.makeText(this, "No songs to add", Toast.LENGTH_SHORT).show();
+            }
             bottomSheet.dismiss();
         });
         
         LinearLayout optionAddToQueue = bottomSheetView.findViewById(R.id.option_add_to_queue);
         optionAddToQueue.setOnClickListener(v -> {
-            Toast.makeText(this, "Add to queue", Toast.LENGTH_SHORT).show();
+            if (!allSongs.isEmpty()) {
+                List<Song> songList = convertToSongList(allSongs);
+                playbackManager.addToQueue(songList);
+                Toast.makeText(this, "Added " + allSongs.size() + " songs to queue", Toast.LENGTH_SHORT).show();
+                android.util.Log.d("Vibe", "Add to queue: " + allSongs.size() + " songs");
+            } else {
+                Toast.makeText(this, "No songs to add", Toast.LENGTH_SHORT).show();
+            }
             bottomSheet.dismiss();
         });
         
+        // Save to playlist option - allows saving all songs to user's playlists
         LinearLayout optionSaveToPlaylist = bottomSheetView.findViewById(R.id.option_save_to_playlist);
         optionSaveToPlaylist.setOnClickListener(v -> {
-            Toast.makeText(this, "Save to playlist", Toast.LENGTH_SHORT).show();
             bottomSheet.dismiss();
+            showSaveToPlaylistBottomSheet();
         });
         
+        // Pin to Speed dial - hide this as it's not implemented
         LinearLayout optionPinToSpeedDial = bottomSheetView.findViewById(R.id.option_pin_to_speed_dial);
-        optionPinToSpeedDial.setOnClickListener(v -> {
-            Toast.makeText(this, "Pin to Speed dial", Toast.LENGTH_SHORT).show();
+        optionPinToSpeedDial.setVisibility(View.GONE);
+        
+        bottomSheet.show();
+    }
+    
+    private void showSaveToPlaylistBottomSheet() {
+        BottomSheetDialog bottomSheet = new BottomSheetDialog(this);
+        View bottomSheetView = getLayoutInflater().inflate(R.layout.bottom_sheet_save_to_playlist, null);
+        bottomSheet.setContentView(bottomSheetView);
+        
+        // Set title
+        TextView sheetTitle = bottomSheetView.findViewById(R.id.bottom_sheet_title);
+        sheetTitle.setText("Save to playlist");
+        music.resona.utils.UiUXUtil.typeface(this, sheetTitle, "akatski.ttf", android.graphics.Typeface.NORMAL);
+        
+        // Close button
+        ImageView btnClose = bottomSheetView.findViewById(R.id.btn_close);
+        btnClose.setOnClickListener(v -> bottomSheet.dismiss());
+        
+        // Create new playlist option
+        LinearLayout optionCreateNew = bottomSheetView.findViewById(R.id.option_create_new);
+        TextView txtCreateNew = bottomSheetView.findViewById(R.id.txt_create_new);
+        music.resona.utils.UiUXUtil.typeface(this, txtCreateNew, "medium.ttf", android.graphics.Typeface.NORMAL);
+        
+        optionCreateNew.setOnClickListener(v -> {
             bottomSheet.dismiss();
+            showCreatePlaylistDialog();
+        });
+        
+        // RecyclerView for user's playlists
+        RecyclerView playlistsRecyclerView = bottomSheetView.findViewById(R.id.rv_playlists);
+        playlistsRecyclerView.setLayoutManager(new LinearLayoutManager(this));
+        
+        // Loading indicator
+        View loadingView = bottomSheetView.findViewById(R.id.loading_playlists);
+        TextView txtNoPlaylists = bottomSheetView.findViewById(R.id.txt_no_playlists);
+        music.resona.utils.UiUXUtil.typeface(this, txtNoPlaylists, "medium.ttf", android.graphics.Typeface.NORMAL);
+        
+        // Load user's playlists
+        loadingView.setVisibility(View.VISIBLE);
+        playlistsRecyclerView.setVisibility(View.GONE);
+        txtNoPlaylists.setVisibility(View.GONE);
+        
+        executor.execute(() -> {
+            try {
+                HomePageResult library = InnertubeBridge.getLibrarySync();
+                List<YTItemResult> userPlaylists = new ArrayList<>();
+                
+                // Extract playlists from library sections
+                for (HomeSectionResult section : library.getSections()) {
+                    for (YTItemResult item : section.getItems()) {
+                        if ("playlist".equalsIgnoreCase(item.getType())) {
+                            userPlaylists.add(item);
+                        }
+                    }
+                }
+                
+                runOnUiThread(() -> {
+                    loadingView.setVisibility(View.GONE);
+                    
+                    if (userPlaylists.isEmpty()) {
+                        txtNoPlaylists.setVisibility(View.VISIBLE);
+                    } else {
+                        playlistsRecyclerView.setVisibility(View.VISIBLE);
+                        // TODO: Create adapter for playlists
+                        // For now, show a simple list
+                        setupPlaylistsAdapter(playlistsRecyclerView, userPlaylists, bottomSheet);
+                    }
+                });
+                
+            } catch (Exception e) {
+                android.util.Log.e("Vibe", "Failed to load playlists", e);
+                runOnUiThread(() -> {
+                    loadingView.setVisibility(View.GONE);
+                    txtNoPlaylists.setVisibility(View.VISIBLE);
+                    txtNoPlaylists.setText("Failed to load playlists");
+                });
+            }
         });
         
         bottomSheet.show();
+    }
+    
+    private void setupPlaylistsAdapter(RecyclerView recyclerView, List<YTItemResult> playlists, BottomSheetDialog parentSheet) {
+        // Simple adapter to show playlists
+        music.resona.activity.adapters.UserPlaylistsAdapter adapter = 
+            new music.resona.activity.adapters.UserPlaylistsAdapter(playlists, playlist -> {
+                // User selected a playlist to save to
+                parentSheet.dismiss();
+                saveAllSongsToPlaylist(playlist.getId(), playlist.getTitle());
+            });
+        recyclerView.setAdapter(adapter);
+    }
+    
+    private void showCreatePlaylistDialog() {
+        android.app.AlertDialog.Builder builder = new android.app.AlertDialog.Builder(this);
+        builder.setTitle("Create new playlist");
+        
+        final EditText input = new EditText(this);
+        input.setHint("Playlist name");
+        music.resona.utils.UiUXUtil.typeface(this, input, "medium.ttf", android.graphics.Typeface.NORMAL);
+        builder.setView(input);
+        
+        builder.setPositiveButton("Create", (dialog, which) -> {
+            String playlistName = input.getText().toString().trim();
+            if (!playlistName.isEmpty()) {
+                createPlaylistAndSaveSongs(playlistName);
+            } else {
+                Toast.makeText(this, "Please enter a playlist name", Toast.LENGTH_SHORT).show();
+            }
+        });
+        
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+        builder.show();
+    }
+    
+    private void createPlaylistAndSaveSongs(String playlistName) {
+        if (allSongs.isEmpty()) {
+            Toast.makeText(this, "No songs to save", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        Toast.makeText(this, "Creating playlist...", Toast.LENGTH_SHORT).show();
+        
+        executor.execute(() -> {
+            try {
+                // Create the playlist
+                String playlistId = InnertubeBridge.createPlaylistSync(playlistName);
+                android.util.Log.d("Vibe", "Created playlist: " + playlistId);
+                
+                // Add all songs to the playlist
+                int successCount = 0;
+                for (SongItem song : allSongs) {
+                    try {
+                        boolean success = InnertubeBridge.addToPlaylistSync(playlistId, song.getVideoId());
+                        if (success) {
+                            successCount++;
+                        }
+                        // Small delay to avoid rate limiting
+                        Thread.sleep(100);
+                    } catch (Exception e) {
+                        android.util.Log.e("Vibe", "Failed to add song: " + song.getTitle(), e);
+                    }
+                }
+                
+                final int finalCount = successCount;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Added " + finalCount + " songs to \"" + playlistName + "\"", 
+                        Toast.LENGTH_LONG).show();
+                });
+                
+            } catch (Exception e) {
+                android.util.Log.e("Vibe", "Failed to create playlist", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Failed to create playlist: " + e.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
+    }
+    
+    private void saveAllSongsToPlaylist(String playlistId, String playlistName) {
+        if (allSongs.isEmpty()) {
+            Toast.makeText(this, "No songs to save", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        
+        Toast.makeText(this, "Adding songs...", Toast.LENGTH_SHORT).show();
+        
+        executor.execute(() -> {
+            try {
+                int successCount = 0;
+                for (SongItem song : allSongs) {
+                    try {
+                        boolean success = InnertubeBridge.addToPlaylistSync(playlistId, song.getVideoId());
+                        if (success) {
+                            successCount++;
+                        }
+                        // Small delay to avoid rate limiting
+                        Thread.sleep(100);
+                    } catch (Exception e) {
+                        android.util.Log.e("Vibe", "Failed to add song: " + song.getTitle(), e);
+                    }
+                }
+                
+                final int finalCount = successCount;
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Added " + finalCount + " songs to \"" + playlistName + "\"", 
+                        Toast.LENGTH_LONG).show();
+                });
+                
+            } catch (Exception e) {
+                android.util.Log.e("Vibe", "Failed to save songs", e);
+                runOnUiThread(() -> {
+                    Toast.makeText(this, "Failed to save songs: " + e.getMessage(), 
+                        Toast.LENGTH_SHORT).show();
+                });
+            }
+        });
     }
     
     private void showShareBottomSheet() {
