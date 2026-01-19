@@ -226,6 +226,7 @@ public class MusicPlaybackManager {
     /**
      * Play a single song using StreamCache for instant playback.
      * Uses LRU cache with 10-minute TTL and LOW quality for speed.
+     * Also sets the queue to this single song so QueueBottomSheet can display it.
      */
     public void playSong(@NonNull Song song, @Nullable PlaybackCallback callback) {
         Log.d(TAG, "Playing song: " + song.getTitle());
@@ -233,6 +234,14 @@ public class MusicPlaybackManager {
         // Set loading state but don't update currentSong yet
         isLoading = true;
         notifyLoadingState(true);
+        
+        // IMPORTANT: Set queue to single song so QueueBottomSheet has data
+        if (musicService != null && isBound) {
+            List<Song> singleSongQueue = new ArrayList<>();
+            singleSongQueue.add(song);
+            musicService.setQueue(singleSongQueue, 0);
+            Log.d(TAG, "Set single-song queue for: " + song.getTitle());
+        }
         
         // Fetch stream URL in background to avoid blocking UI
         executor.execute(() -> {

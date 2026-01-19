@@ -1,6 +1,6 @@
 <resources>
     <string name="app_name">Resona</string>
-    
+
     <!-- Artist Page -->
     <string name="back">Back</string>
     <string name="more_options">More options</string>
@@ -13,7 +13,7 @@
     <string name="albums">Albums</string>
     <string name="singles">Singles</string>
     <string name="videos">Videos</string>
-    
+
     <!-- Search -->
     <string name="search">Search</string>
     <string name="search_songs_artists_albums">Search songs, artists, albums</string>
@@ -27,13 +27,13 @@
     <string name="error">Error</string>
     <string name="something_went_wrong">Something went wrong</string>
     <string name="album_art">Album art</string>
-    
+
     <!-- Share Card -->
     <string name="playlist">Playlist</string>
     <string name="various_artists">Various Artists</string>
     <string name="watermark">Resona Music</string>
-    
+
     <!-- Home Feed -->
     <string name="profile_avatar">Profile Avatar</string>
-    
+
 </resources>

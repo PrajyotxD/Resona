@@ -19,15 +19,16 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Resona">
-        
+        <activity
+            android:name=".activity.player.PlayerHybrid"
+            android:exported="false" />
         <!-- Full Screen Player Activity -->
         <activity
             android:name=".activity.FullScreenPlayerActivity"
             android:exported="false"
-            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
             android:screenOrientation="portrait"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar"
             android:windowSoftInputMode="stateHidden" />
-        
         <activity
             android:name=".activity.Vibe"
             android:exported="false" />
@@ -43,15 +44,11 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-        </activity>
-        
-        <!-- Music Playback Service -->
+        </activity> <!-- Music Playback Service -->
         <service
             android:name=".service.MusicService"
             android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
-
-        <!-- FileProvider for sharing images -->
+            android:foregroundServiceType="mediaPlayback" /> <!-- FileProvider for sharing images -->
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

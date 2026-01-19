@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
 import androidx.activity.EdgeToEdge;
 import androidx.activity.result.ActivityResultLauncher;
@@ -28,6 +29,7 @@ import music.resona.activity.AuthActivity;
 import music.resona.activity.FullScreenPlayerActivity;
 import music.resona.app.App;
 import music.resona.fragment.HomeFeed;
+import music.resona.fragment.PlayerFragment;
 import music.resona.manager.MusicPlaybackManager;
 import music.resona.models.Song;
 import music.resona.online.bridge.InnertubeBridge;
@@ -382,7 +384,7 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
                 
                 @Override
                 public void onMiniPlayerClick() {
-                    openFullScreenPlayer();
+                    openPlayerHybrid();
                 }
             });
             
@@ -422,6 +424,49 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
         Intent intent = new Intent(this, FullScreenPlayerActivity.class);
         startActivity(intent);
         overridePendingTransition(0, 0); // Custom animation handled in activity
+    }
+    
+    /**
+     * Opens the PlayerFragment.
+     * Shows WebView-based custom player UI as a fragment with hidden nav bar.
+     */
+    private void openPlayerHybrid() {
+        // Check if PlayerFragment is already showing
+        if (getSupportFragmentManager().findFragmentByTag("PlayerFragment") != null) {
+            Log.d(TAG, "PlayerFragment already showing, ignoring click");
+            return;
+        }
+        
+        Log.d(TAG, "Opening PlayerFragment");
+        PlayerFragment playerFragment = PlayerFragment.newInstance();
+        playerFragment.setCallback(isVisible -> {
+            // Show/hide nav bar and mini player based on player visibility
+            if (navBarContainer != null) {
+                navBarContainer.setVisibility(isVisible ? View.GONE : View.VISIBLE);
+            }
+        });
+        
+        getSupportFragmentManager()
+            .beginTransaction()
+            .add(R.id.fragment_container, playerFragment, "PlayerFragment")
+            .addToBackStack("PlayerFragment")
+            .commit();
+    }
+    
+    /**
+     * Opens the PlayerBottomSheet.
+     * Shows WebView-based custom player UI in a bottom sheet that can be swiped down to dismiss.
+     */
+    private void openPlayerBottomSheet() {
+        // Check if PlayerBottomSheet is already showing
+        if (getSupportFragmentManager().findFragmentByTag("PlayerBottomSheet") != null) {
+            Log.d(TAG, "PlayerBottomSheet already showing, ignoring click");
+            return;
+        }
+        
+        Log.d(TAG, "Opening PlayerBottomSheet");
+        music.resona.ui.PlayerBottomSheet playerSheet = music.resona.ui.PlayerBottomSheet.newInstance();
+        playerSheet.show(getSupportFragmentManager(), "PlayerBottomSheet");
     }
     
     /**

@@ -88,6 +88,8 @@ public class MusicService extends Service implements Player.Listener {
     // Audio focus
     private AudioManager audioManager;
     private AudioFocusRequest audioFocusRequest;
+    private boolean wasPlayingBeforeFocusLoss = false;
+    private boolean isUserInitiatedPlay = false; // Track if play was user-initiated
     
     // State management
     private boolean isPlaying = false;
@@ -445,7 +447,8 @@ public class MusicService extends Service implements Player.Listener {
     
     public void play() {
         if (exoPlayer != null) {
-            requestAudioFocus();
+            // ExoPlayer handles audio focus automatically via setAudioAttributes(attrs, true)
+            // No need for manual requestAudioFocus() - it causes dual listener conflicts
             exoPlayer.setPlayWhenReady(true);
             startForeground(NOTIFICATION_ID, buildNotification());
         }
@@ -453,8 +456,9 @@ public class MusicService extends Service implements Player.Listener {
     
     public void pause() {
         if (exoPlayer != null) {
+            // ExoPlayer handles audio focus automatically
+            // No need for manual abandonAudioFocus()
             exoPlayer.setPlayWhenReady(false);
-            abandonAudioFocus();
         }
     }
     
@@ -1232,20 +1236,30 @@ public class MusicService extends Service implements Player.Listener {
         switch (focusChange) {
             case AudioManager.AUDIOFOCUS_GAIN:
                 Log.d(TAG, "Audio focus gained");
-                if (!isPlaying) {
-                    play();
+                // Only resume if we were playing before focus loss (not on initial request)
+                if (wasPlayingBeforeFocusLoss && !isPlaying && !isUserInitiatedPlay) {
+                    exoPlayer.setPlayWhenReady(true);
+                    startForeground(NOTIFICATION_ID, buildNotification());
                 }
+                // Reset the user-initiated flag after handling
+                isUserInitiatedPlay = false;
                 setVolume(currentVolume);
                 break;
             
             case AudioManager.AUDIOFOCUS_LOSS:
-                Log.d(TAG, "Audio focus lost");
-                pause();
+                Log.d(TAG, "Audio focus lost permanently");
+                wasPlayingBeforeFocusLoss = false; // Don't auto-resume on permanent loss
+                if (exoPlayer != null) {
+                    exoPlayer.setPlayWhenReady(false);
+                }
                 break;
             
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                 Log.d(TAG, "Audio focus lost transient");
-                pause();
+                wasPlayingBeforeFocusLoss = isPlaying; // Remember if we were playing
+                if (exoPlayer != null) {
+                    exoPlayer.setPlayWhenReady(false);
+                }
                 break;
             
             case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:

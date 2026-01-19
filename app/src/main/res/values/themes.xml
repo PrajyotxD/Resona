@@ -24,5 +24,29 @@
         <item name="chipStrokeWidth">2dp</item>
         <item name="android:textColor">@android:color/white</item>
     </style>
+    
+    <!-- Player Bottom Sheet Style -->
+    <style name="PlayerBottomSheetStyle" parent="Theme.Material3.DayNight.BottomSheetDialog">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowSoftInputMode">adjustResize</item>
+        <item name="bottomSheetStyle">@style/PlayerBottomSheetModal</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">#121212</item>
+        <item name="android:backgroundDimAmount">1.0</item>
+        <item name="android:backgroundDimEnabled">true</item>
+    </style>
+    
+    <style name="PlayerBottomSheetModal" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">#121212</item>
+        <item name="shapeAppearance">@style/PlayerBottomSheetShape</item>
+    </style>
+    
+    <style name="PlayerBottomSheetShape" parent="ShapeAppearance.Material3.Corner.Medium">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">16dp</item>
+        <item name="cornerSizeTopRight">16dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
 
 </resources>

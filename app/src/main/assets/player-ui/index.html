@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Music Player</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Lucide Icons bundled locally for instant loading -->
+    <script src="lucide.min.js"></script>
+</head>
+<body>
+    <div class="player-container">
+        <!-- Background Blur -->
+        <div class="background-blur"></div>
+        
+        <!-- Main Player View -->
+        <div id="main-view" class="view active">
+            <header class="player-header">
+                <span class="now-playing-label">Now Playing</span>
+                <h2 class="device-name">Softt hp</h2>
+            </header>
+
+            <div class="album-art-container">
+                <img src="" alt="Album Art" class="album-art">
+            </div>
+
+            <div class="track-info-container">
+                <div class="track-details">
+                    <h1 class="track-title">Ankahi Baateen</h1>
+                    <p class="track-artist">DEVEL</p>
+                </div>
+                <div class="track-actions">
+                    <button class="action-btn heart-btn"><i data-lucide="heart"></i></button>
+                    <button class="action-btn share-btn"><i data-lucide="share-2"></i></button>
+                </div>
+            </div>
+
+            <div class="progress-container">
+                <input type="range" class="progress-bar" value="0" min="0" max="100">
+                <div class="time-info">
+                    <span class="current-time">0:00</span>
+                    <span class="total-time">2:59</span>
+                </div>
+            </div>
+
+            <div class="main-controls">
+                <button class="control-btn prev-btn"><i data-lucide="skip-back"></i></button>
+                <button class="play-pause-btn">
+                    <i data-lucide="play" class="play-icon"></i>
+                    <span>Play</span>
+                </button>
+                <button class="control-btn next-btn"><i data-lucide="skip-forward"></i></button>
+            </div>
+
+            <footer class="player-footer">
+                <div class="secondary-controls">
+                    <button class="footer-btn shuffle-btn"><i data-lucide="shuffle"></i></button>
+                    <button class="footer-btn volume-btn"><i data-lucide="volume-2"></i></button>
+                    <button class="footer-btn sleep-timer-btn"><i data-lucide="timer"></i></button>
+                    <button class="footer-btn queue-btn"><i data-lucide="list"></i></button>
+                    <button class="footer-btn repeat-btn"><i data-lucide="repeat"></i></button>
+                </div>
+                <button class="more-btn lyrics-toggle"><i data-lucide="mic-2"></i></button>
+            </footer>
+        </div>
+
+        <!-- Lyrics View -->
+        <div id="lyrics-view" class="view">
+            <header class="lyrics-header">
+                <button class="back-btn"><i data-lucide="chevron-down"></i></button>
+                <div class="lyrics-track-info">
+                    <span class="lyrics-title">Ankahi Baatein</span>
+                    <span class="lyrics-artist">DEVEL</span>
+                </div>
+            </header>
+            <div class="lyrics-content">
+                <p class="lyric-line active">Written, Performed, Produced</p>
+                <p class="lyric-line">Mixed, Mastered & Edited by DEVEL</p>
+                <p class="lyric-line">This is where the lyrics go...</p>
+                <p class="lyric-line">Walking down the empty streets</p>
+                <p class="lyric-line">Thinking 'bout the memories</p>
+                <p class="lyric-line">Everything we used to be</p>
+                <p class="lyric-line">Now it's just a mystery</p>
+                <p class="lyric-line">Ankahi baatein reh gayi</p>
+                <p class="lyric-line">Dil mein hi dabi reh gayi</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+    <script>
+        // Initialize Lucide icons
+        lucide.createIcons();
+
+        // Fix for mobile viewport height
+        const setVh = () => {
+            let vh = window.innerHeight * 0.01;
+            document.documentElement.style.setProperty('--vh', `${vh}px`);
+        };
+        setVh();
+        window.addEventListener('resize', setVh);
+    </script>
+</body>
+</html>
