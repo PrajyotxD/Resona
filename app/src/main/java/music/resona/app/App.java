@@ -7,9 +7,14 @@ import android.util.Log;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.util.concurrent.Executors;
+
+import music.resona.database.RecommendationDatabase;
 import music.resona.online.bridge.InnertubeBridge;
 import music.resona.online.bridge.callbacks.StringCallback;
 import music.resona.online.bridge.exceptions.BridgeException;
+import music.resona.online.bridge.models.SearchResult;
+import music.resona.online.bridge.models.YTItemResult;
 
 /**
  * Main Application class for Resona.
@@ -51,6 +56,9 @@ public class App extends Application {
         if (isUserAuthenticated()) {
             InnertubeBridge.setUseLoginForBrowse(true);
             Log.d(TAG, "✓ Authenticated - using login for browse");
+            
+            // Sync liked songs from YouTube in background
+            syncLikedSongsFromYouTube();
         } else {
             InnertubeBridge.setUseLoginForBrowse(false);
             Log.d(TAG, "Anonymous - using visitor data for browse");
@@ -91,7 +99,11 @@ public class App extends Application {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         prefs.edit().putString(KEY_AUTH_COOKIE, cookie).apply();
         InnertubeBridge.setCookieSync(cookie);
+        InnertubeBridge.setUseLoginForBrowse(true);
         Log.d(TAG, "✓ Authentication cookie saved");
+        
+        // Sync liked songs from YouTube after authentication
+        syncLikedSongsFromYouTube();
     }
     
     /**
@@ -225,5 +237,45 @@ public class App extends Application {
             ? visitorData.substring(0, Math.min(VISITOR_DATA_LOG_LENGTH, visitorData.length())) + "..." 
             : "null";
         return "Ready: " + visitorDataReady + ", Data: " + dataPreview;
+    }
+    
+    /**
+     * Syncs liked songs from YouTube Music to local database.
+     * Should be called after authentication or periodically.
+     * Runs on background thread.
+     */
+    public void syncLikedSongsFromYouTube() {
+        if (!isUserAuthenticated()) {
+            Log.d(TAG, "Not authenticated - skipping YouTube likes sync");
+            return;
+        }
+        
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                Log.d(TAG, "Syncing liked songs from YouTube...");
+                SearchResult result = InnertubeBridge.getLikedSongsSync();
+                
+                if (result != null && result.getItems() != null) {
+                    RecommendationDatabase db = RecommendationDatabase.getInstance(this);
+                    int count = 0;
+                    
+                    for (YTItemResult item : result.getItems()) {
+                        if (item.getId() != null && !item.getId().isEmpty()) {
+                            // Add to local liked songs if not already liked
+                            if (!db.isLiked(item.getId())) {
+                                db.likeSong(item.getId());
+                                count++;
+                            }
+                        }
+                    }
+                    
+                    Log.d(TAG, "✓ Synced " + count + " new liked songs from YouTube (total: " + result.getItems().size() + ")");
+                } else {
+                    Log.w(TAG, "No liked songs returned from YouTube");
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error syncing liked songs from YouTube", e);
+            }
+        });
     }
 }

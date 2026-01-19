@@ -826,6 +826,57 @@ public class PlayerHelper implements MusicPlaybackManager.PlaybackListener {
     }
     
     /**
+     * Check if current song is liked
+     * @return true if current song is liked, false otherwise
+     */
+    @JavascriptInterface
+    public boolean isCurrentSongLiked() {
+        Song song = getCurrentSongObject();
+        if (song != null) {
+            music.resona.database.RecommendationDatabase db = 
+                music.resona.database.RecommendationDatabase.getInstance(context);
+            return db.isLiked(song.getVideoId());
+        }
+        return false;
+    }
+    
+    /**
+     * Check if a specific song is liked by videoId
+     * @param videoId The video ID to check
+     * @return true if the song is liked, false otherwise
+     */
+    @JavascriptInterface
+    public boolean isSongLiked(String videoId) {
+        if (videoId == null || videoId.isEmpty()) return false;
+        music.resona.database.RecommendationDatabase db = 
+            music.resona.database.RecommendationDatabase.getInstance(context);
+        return db.isLiked(videoId);
+    }
+    
+    /**
+     * Toggle like state for current song
+     * If liked, unlikes it. If not liked, likes it.
+     */
+    @JavascriptInterface
+    public void toggleLike() {
+        Log.d(TAG, "JS: toggleLike()");
+        Song song = getCurrentSongObject();
+        if (song == null) return;
+        
+        MusicService service = getMusicService();
+        if (service == null) return;
+        
+        music.resona.database.RecommendationDatabase db = 
+            music.resona.database.RecommendationDatabase.getInstance(context);
+        
+        if (db.isLiked(song.getVideoId())) {
+            service.unlikeSong(song);
+        } else {
+            service.likeSong(song);
+        }
+    }
+
+    /**
      * Share current song via Android share intent
      */
     @JavascriptInterface

@@ -50,6 +50,7 @@ import music.resona.models.Song;
 import music.resona.cache.StreamCache;
 import music.resona.database.QuickPicksDatabase;
 import music.resona.database.RecommendationDatabase;
+import music.resona.online.bridge.InnertubeBridge;
 
 /**
  * Modern foreground service for background music playback using ExoPlayer2.
@@ -1286,8 +1287,21 @@ public class MusicService extends Service implements Player.Listener {
         if (song == null) return;
         executor.execute(() -> {
             try {
+                // Always update local database
                 recommendationDb.likeSong(song.getVideoId());
-                Log.d(TAG, "Liked song: " + song.getTitle());
+                Log.d(TAG, "Liked song locally: " + song.getTitle());
+                
+                // Sync with YouTube if authenticated
+                if (InnertubeBridge.isAuthenticatedSync()) {
+                    boolean success = InnertubeBridge.likeVideoSync(song.getVideoId());
+                    if (success) {
+                        Log.d(TAG, "Synced like to YouTube: " + song.getTitle());
+                    } else {
+                        Log.w(TAG, "Failed to sync like to YouTube (API returned false)");
+                    }
+                } else {
+                    Log.d(TAG, "Not authenticated - like saved locally only");
+                }
                 
                 for (MusicServiceListener listener : listeners) {
                     if (listener instanceof LikeListener) {
@@ -1304,8 +1318,12 @@ public class MusicService extends Service implements Player.Listener {
         if (song == null) return;
         executor.execute(() -> {
             try {
+                // Always update local database
                 recommendationDb.dislikeSong(song.getVideoId());
-                Log.d(TAG, "Disliked song: " + song.getTitle());
+                Log.d(TAG, "Disliked song locally: " + song.getTitle());
+                
+                // Note: YouTube doesn't have a "dislike" for music, only like/neutral
+                // So we only store dislikes locally for recommendation filtering
                 
                 for (MusicServiceListener listener : listeners) {
                     if (listener instanceof LikeListener) {
@@ -1322,8 +1340,21 @@ public class MusicService extends Service implements Player.Listener {
         if (song == null) return;
         executor.execute(() -> {
             try {
+                // Always update local database
                 recommendationDb.unlikeSong(song.getVideoId());
-                Log.d(TAG, "Unliked song: " + song.getTitle());
+                Log.d(TAG, "Unliked song locally: " + song.getTitle());
+                
+                // Sync with YouTube if authenticated (remove like)
+                if (InnertubeBridge.isAuthenticatedSync()) {
+                    boolean success = InnertubeBridge.unlikeVideoSync(song.getVideoId());
+                    if (success) {
+                        Log.d(TAG, "Removed like from YouTube: " + song.getTitle());
+                    } else {
+                        Log.w(TAG, "Failed to remove like from YouTube (API returned false)");
+                    }
+                } else {
+                    Log.d(TAG, "Not authenticated - unlike saved locally only");
+                }
                 
                 for (MusicServiceListener listener : listeners) {
                     if (listener instanceof LikeListener) {

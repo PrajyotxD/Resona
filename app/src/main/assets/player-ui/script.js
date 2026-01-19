@@ -53,29 +53,87 @@ document.addEventListener('DOMContentLoaded', () => {
     // ========== GLOBAL UPDATE FUNCTIONS (called from native) ==========
     // Define these first so they're available for initializeFromNativePlayer
 
-    window.updateSongInfo = function(title, artist, thumbnailUrl) {
+    window.updateSongInfo = function(title, artist, thumbnailUrl, likedStatus) {
         // Only log when actually updating
         const newTitle = title || 'Unknown Track';
         const newArtist = artist || 'Unknown Artist';
         
-        // Skip if same as current
-        if (trackTitle && trackTitle.textContent === newTitle && 
-            trackArtist && trackArtist.textContent === newArtist) {
-            return;
+        // Check if song changed
+        const songChanged = !(trackTitle && trackTitle.textContent === newTitle && 
+            trackArtist && trackArtist.textContent === newArtist);
+        
+        if (songChanged) {
+            console.log('updateSongInfo:', title, artist);
+            if (trackTitle) trackTitle.textContent = newTitle;
+            if (trackArtist) trackArtist.textContent = newArtist;
+            if (albumArt && thumbnailUrl) {
+                albumArt.src = thumbnailUrl;
+            }
+
+            // Update lyrics header too
+            const lyricsTitle = document.querySelector('.lyrics-title');
+            const lyricsArtist = document.querySelector('.lyrics-artist');
+            if (lyricsTitle) lyricsTitle.textContent = newTitle;
+            if (lyricsArtist) lyricsArtist.textContent = newArtist;
         }
         
-        console.log('updateSongInfo:', title, artist);
-        if (trackTitle) trackTitle.textContent = newTitle;
-        if (trackArtist) trackArtist.textContent = newArtist;
-        if (albumArt && thumbnailUrl) {
-            albumArt.src = thumbnailUrl;
+        // Always update heart/like state (could have changed even for same song)
+        if (heartBtn) {
+            if (typeof likedStatus === 'boolean') {
+                // Use provided status
+                updateHeartState(likedStatus);
+            } else if (hasNativePlayer) {
+                // Fetch from native
+                try {
+                    const songLiked = PlayerHelper.isCurrentSongLiked();
+                    updateHeartState(songLiked);
+                } catch (e) {
+                    console.error('Error checking like state:', e);
+                }
+            }
         }
-
-        // Update lyrics header too
-        const lyricsTitle = document.querySelector('.lyrics-title');
-        const lyricsArtist = document.querySelector('.lyrics-artist');
-        if (lyricsTitle) lyricsTitle.textContent = newTitle;
-        if (lyricsArtist) lyricsArtist.textContent = newArtist;
+    };
+    
+    // Helper function to update heart button UI
+    function updateHeartState(liked) {
+        if (!heartBtn) return;
+        isLiked = liked;
+        const icon = heartBtn.querySelector('svg, i');
+        
+        if (icon) {
+            icon.remove();
+        }
+        const newIcon = document.createElement('i');
+        newIcon.setAttribute('data-lucide', 'heart');
+        heartBtn.insertBefore(newIcon, heartBtn.firstChild);
+        
+        if (liked) {
+            heartBtn.style.color = '#ff3b30';
+            heartBtn.style.background = 'rgba(255, 59, 48, 0.15)';
+            heartBtn.classList.add('liked');
+        } else {
+            heartBtn.style.color = 'white';
+            heartBtn.style.background = 'rgba(255, 255, 255, 0.08)';
+            heartBtn.classList.remove('liked');
+        }
+        lucide.createIcons();
+    }
+    
+    // Global function to refresh like state (can be called from native)
+    window.updateLikeState = function(liked) {
+        updateHeartState(liked);
+    };
+    
+    // Also refresh like state when called without args (fetches from native)
+    window.refreshLikeState = function() {
+        if (hasNativePlayer && heartBtn) {
+            try {
+                const songLiked = PlayerHelper.isCurrentSongLiked();
+                updateHeartState(songLiked);
+            } catch (e) {
+                console.error('Error refreshing like state:', e);
+            }
+        }
     };
 
     window.updatePlaybackState = function(playing) {
@@ -130,6 +188,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const isActive = repeatMode !== 'OFF';
                 repeatBtn.style.color = isActive ? '#1DB954' : 'white';
                 repeatBtn.style.opacity = isActive ? '1' : '0.6';
+            }
+            
+            // Update like/heart state
+            if (heartBtn) {
+                const songLiked = PlayerHelper.isCurrentSongLiked();
+                updateHeartState(songLiked);
             }
 
         } catch (e) {
@@ -290,54 +354,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Heart Toggle
     if (heartBtn) {
         heartBtn.addEventListener('click', () => {
-            isLiked = !isLiked;
-            // Find icon - could be 'i' or 'svg' depending on Lucide state
-            const icon = heartBtn.querySelector('svg, i');
-            
-            if (isLiked) {
-                // Replace with filled heart for liked state
-                if (icon) {
-                    icon.remove();
-                }
-                const newIcon = document.createElement('i');
-                newIcon.setAttribute('data-lucide', 'heart');
-                heartBtn.insertBefore(newIcon, heartBtn.firstChild);
-                
-                heartBtn.style.color = '#ff3b30';
-                heartBtn.style.background = 'rgba(255, 59, 48, 0.15)';
-                heartBtn.classList.add('liked');
-                
-                if (hasNativePlayer) {
-                    try {
-                        PlayerHelper.likeSong();
-                        console.log('Like song called');
-                    } catch (e) {
-                        console.error('Error liking song:', e);
-                    }
+            if (hasNativePlayer) {
+                try {
+                    // Toggle via native bridge (handles both local DB and YouTube sync)
+                    PlayerHelper.toggleLike();
+                    
+                    // Update UI immediately (optimistic update)
+                    isLiked = !isLiked;
+                    updateHeartState(isLiked);
+                    console.log(isLiked ? 'Like song called' : 'Unlike song called');
+                } catch (e) {
+                    console.error('Error toggling like:', e);
                 }
             } else {
-                // Replace with outline heart for unliked state
-                if (icon) {
-                    icon.remove();
-                }
-                const newIcon = document.createElement('i');
-                newIcon.setAttribute('data-lucide', 'heart');
-                heartBtn.insertBefore(newIcon, heartBtn.firstChild);
-                
-                heartBtn.style.color = 'white';
-                heartBtn.style.background = 'rgba(255, 255, 255, 0.08)';
-                heartBtn.classList.remove('liked');
-                
-                if (hasNativePlayer) {
-                    try {
-                        PlayerHelper.unlikeSong();
-                        console.log('Unlike song called');
-                    } catch (e) {
-                        console.error('Error unliking song:', e);
-                    }
-                }
+                // Fallback for non-native (web demo mode)
+                isLiked = !isLiked;
+                updateHeartState(isLiked);
             }
-            lucide.createIcons();
         });
     }
     // Share button

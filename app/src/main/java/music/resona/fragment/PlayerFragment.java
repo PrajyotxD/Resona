@@ -21,6 +21,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
+import music.resona.database.RecommendationDatabase;
 import music.resona.manager.MusicPlaybackManager;
 import music.resona.models.Song;
 import music.resona.service.MusicService;
@@ -225,9 +226,16 @@ public class PlayerFragment extends Fragment implements MusicPlaybackManager.Pla
             String artist = escapeJs(song.getArtist() != null ? song.getArtist() : "Unknown Artist");
             String thumbnail = escapeJs(song.getThumbnailUrl() != null ? song.getThumbnailUrl() : "");
             
+            // Check if song is liked
+            boolean isLiked = false;
+            if (getContext() != null) {
+                RecommendationDatabase db = RecommendationDatabase.getInstance(getContext());
+                isLiked = db.isLiked(song.getVideoId());
+            }
+            
             js.append("    if (window.updateSongInfo) {");
             js.append("      window.updateSongInfo('").append(title).append("', '")
-              .append(artist).append("', '").append(thumbnail).append("');");
+              .append(artist).append("', '").append(thumbnail).append("', ").append(isLiked).append(");");
             js.append("    }");
         }
         
