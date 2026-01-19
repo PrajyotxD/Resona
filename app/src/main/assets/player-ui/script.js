@@ -45,6 +45,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentTime = 0;
     let duration = 179; // Default, will be updated
     let isDraggingProgress = false;
+    
+    // Lyrics state (declared early so global functions can access)
+    let lyricsData = null;        // Current lyrics data from provider
+    let syncedLyrics = [];        // Array of {time: ms, text: string}
+    let currentLyricIndex = -1;   // Currently highlighted line
+    let isLoadingLyrics = false;
 
     // Check if PlayerHelper is available
     const hasNativePlayer = typeof PlayerHelper !== 'undefined';
@@ -75,6 +81,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const lyricsArtist = document.querySelector('.lyrics-artist');
             if (lyricsTitle) lyricsTitle.textContent = newTitle;
             if (lyricsArtist) lyricsArtist.textContent = newArtist;
+            
+            // Reset lyrics for new song
+            lyricsData = null;
+            syncedLyrics = [];
+            currentLyricIndex = -1;
+            
+            // If lyrics view is open, show loading and fetch new lyrics
+            if (lyricsView && lyricsView.classList.contains('active') && hasNativePlayer) {
+                showLyricsLoading();
+                fetchLyrics();
+            } else if (lyricsContent) {
+                // Pre-show loading state so it's ready when user opens lyrics
+                showLyricsLoading();
+            }
+            
+            // Prefetch lyrics in background
+            if (hasNativePlayer) {
+                try {
+                    PlayerHelper.prefetchLyrics();
+                } catch (e) {
+                    console.error('Error prefetching lyrics:', e);
+                }
+            }
         }
         
         // Always update heart/like state (could have changed even for same song)
@@ -262,13 +291,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ========== UI EVENT HANDLERS ==========
 
-    // Toggle Lyrics View
+    // Toggle Lyrics View - Open instantly with loading state
     if (lyricsToggle) {
         lyricsToggle.addEventListener('click', () => {
             if (mainView && lyricsView) {
+                // Open lyrics view IMMEDIATELY
                 mainView.classList.remove('active');
                 lyricsView.classList.add('active');
-                setTimeout(scrollToActiveLyric, 300);
+                
+                // Show loading or scroll to active lyric
+                if (!lyricsData && hasNativePlayer) {
+                    // Show loading spinner immediately
+                    showLyricsLoading();
+                    // Fetch lyrics in background
+                    fetchLyrics();
+                } else if (lyricsData && syncedLyrics.length > 0) {
+                    // Already have lyrics, scroll to current line
+                    setTimeout(scrollToActiveLyric, 100);
+                }
             }
         });
     }
@@ -591,75 +631,235 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
-    // ========== LYRICS FUNCTIONS ==========
-
-    function updateLyricsHighlight() {
-        const lineIndex = Math.floor((currentTime / duration) * lyricLines.length);
-        let changed = false;
+    // ========== LYRICS SYSTEM ==========
+    
+    // Lyrics state is declared at the top of the script
+    
+    /**
+     * Fetch lyrics for current song
+     */
+    function fetchLyrics() {
+        if (!hasNativePlayer || isLoadingLyrics) return;
         
-        lyricLines.forEach((line, index) => {
-            if (index === lineIndex) {
-                if (!line.classList.contains('active')) {
-                    line.classList.add('active');
-                    changed = true;
-                }
+        isLoadingLyrics = true;
+        showLyricsLoading();
+        
+        try {
+            // Synchronous fetch (runs in background on native side)
+            const lyricsJson = PlayerHelper.getLyrics();
+            console.log('Lyrics response:', lyricsJson);
+            
+            if (lyricsJson && lyricsJson !== '{}') {
+                const data = JSON.parse(lyricsJson);
+                handleLyricsLoaded(data);
             } else {
-                line.classList.remove('active');
+                showNoLyrics();
+            }
+        } catch (e) {
+            console.error('Error fetching lyrics:', e);
+            showNoLyrics();
+        } finally {
+            isLoadingLyrics = false;
+        }
+    }
+    
+    /**
+     * Handle loaded lyrics data
+     */
+    function handleLyricsLoaded(data) {
+        lyricsData = data;
+        
+        if (data.isSynced && data.syncedLines && data.syncedLines.length > 0) {
+            // Time-synced lyrics
+            syncedLyrics = data.syncedLines;
+            renderSyncedLyrics();
+            console.log('Loaded ' + syncedLyrics.length + ' synced lyrics lines from ' + data.provider);
+        } else if (data.plainLyrics) {
+            // Plain text lyrics
+            syncedLyrics = [];
+            renderPlainLyrics(data.plainLyrics);
+            console.log('Loaded plain lyrics from ' + data.provider);
+        } else {
+            showNoLyrics();
+        }
+    }
+    
+    /**
+     * Render time-synced lyrics (Spotify-style)
+     */
+    function renderSyncedLyrics() {
+        if (!lyricsContent) return;
+        
+        lyricsContent.innerHTML = '';
+        currentLyricIndex = -1;
+        
+        syncedLyrics.forEach((line, index) => {
+            const p = document.createElement('p');
+            p.className = 'lyric-line';
+            p.textContent = line.text || '';
+            p.dataset.time = line.time;
+            p.dataset.index = index;
+            
+            // Click to seek
+            p.addEventListener('click', () => {
+                if (hasNativePlayer && line.time !== undefined) {
+                    try {
+                        const percentage = line.time / (duration * 1000);
+                        PlayerHelper.seekToPercentage(percentage);
+                        if (!isPlaying) {
+                            PlayerHelper.play();
+                        }
+                    } catch (e) {
+                        console.error('Error seeking from lyrics:', e);
+                    }
+                }
+            });
+            
+            lyricsContent.appendChild(p);
+        });
+        
+        // Update highlight immediately and scroll to current position
+        updateLyricsHighlight();
+        
+        // Scroll to active lyric after a brief delay to let DOM settle
+        setTimeout(() => {
+            if (lyricsView && lyricsView.classList.contains('active')) {
+                scrollToActiveLyric();
+            }
+        }, 100);
+    }
+    
+    /**
+     * Render plain text lyrics (no timestamps)
+     */
+    function renderPlainLyrics(text) {
+        if (!lyricsContent) return;
+        
+        lyricsContent.innerHTML = '';
+        syncedLyrics = [];
+        currentLyricIndex = -1;
+        
+        const lines = text.split('\n');
+        lines.forEach((line, index) => {
+            if (line.trim()) {
+                const p = document.createElement('p');
+                p.className = 'lyric-line';
+                p.textContent = line;
+                lyricsContent.appendChild(p);
             }
         });
-
-        if (changed && lyricsView.classList.contains('active')) {
-            scrollToActiveLyric();
+    }
+    
+    /**
+     * Show loading state with spinner
+     */
+    function showLyricsLoading() {
+        if (!lyricsContent) return;
+        lyricsContent.innerHTML = `
+            <div class="lyrics-loading-container">
+                <div class="lyrics-loading-spinner"></div>
+                <span class="lyrics-loading-text">Finding lyrics...</span>
+            </div>
+        `;
+    }
+    
+    /**
+     * Show no lyrics available
+     */
+    function showNoLyrics() {
+        if (!lyricsContent) return;
+        lyricsContent.innerHTML = `
+            <div class="no-lyrics-container">
+                <div class="no-lyrics-icon">🎵</div>
+                <span class="no-lyrics-text">No lyrics available</span>
+                <span class="no-lyrics-subtext">Lyrics not found for this track</span>
+            </div>
+        `;
+        syncedLyrics = [];
+        lyricsData = null;
+    }
+    
+    /**
+     * Update lyrics highlight based on current playback position
+     * Marks current line as active and past lines as past (Spotify-style)
+     */
+    function updateLyricsHighlight() {
+        if (!syncedLyrics || syncedLyrics.length === 0) return;
+        
+        // Find the current line based on playback time (currentTime is in seconds)
+        const currentTimeMs = currentTime * 1000;
+        let newIndex = -1;
+        
+        for (let i = 0; i < syncedLyrics.length; i++) {
+            if (syncedLyrics[i].time <= currentTimeMs) {
+                newIndex = i;
+            } else {
+                break;
+            }
+        }
+        
+        // Only update if changed
+        if (newIndex !== currentLyricIndex) {
+            // Update all lines - mark past, active, and future
+            const allLines = lyricsContent.querySelectorAll('.lyric-line');
+            allLines.forEach((line, index) => {
+                line.classList.remove('active', 'past');
+                if (index < newIndex) {
+                    line.classList.add('past');
+                } else if (index === newIndex) {
+                    line.classList.add('active');
+                }
+            });
+            
+            currentLyricIndex = newIndex;
+            
+            // Auto-scroll if lyrics view is active
+            if (currentLyricIndex >= 0 && lyricsView && lyricsView.classList.contains('active')) {
+                scrollToActiveLyric();
+            }
         }
     }
 
+    /**
+     * Scroll to center the active lyric line (Spotify-style)
+     */
     function scrollToActiveLyric() {
-        const activeLine = document.querySelector('.lyric-line.active');
-        if (activeLine && lyricsView.classList.contains('active')) {
+        const activeLine = lyricsContent.querySelector('.lyric-line.active');
+        if (activeLine && lyricsContent) {
             const containerHeight = lyricsContent.clientHeight;
             const lineOffset = activeLine.offsetTop;
             const lineHeight = activeLine.clientHeight;
             
-            const targetScroll = lineOffset - (containerHeight / 2) + (lineHeight / 2);
+            // Position active line at ~35% from top for better visibility
+            const targetScroll = lineOffset - (containerHeight * 0.35) + (lineHeight / 2);
             
             lyricsContent.scrollTo({
-                top: targetScroll,
+                top: Math.max(0, targetScroll),
                 behavior: 'smooth'
             });
         }
     }
-
-    // Allow clicking lyrics to seek
-    lyricLines.forEach((line, index) => {
-        line.addEventListener('click', () => {
-            const percentage = index / lyricLines.length;
-            
-            if (hasNativePlayer) {
-                try {
-                    PlayerHelper.seekToPercentage(percentage);
-                    if (!isPlaying) {
-                        PlayerHelper.play();
-                    }
-                } catch (e) {
-                    console.error('Error seeking from lyrics:', e);
-                }
-            } else {
-                currentTime = Math.floor(percentage * duration);
-                updateProgress();
-                updateLyricsHighlight();
-                if (!isPlaying) {
-                    isPlaying = true;
-                    updatePlayState();
-                }
+    
+    // Global function to trigger lyrics fetch (can be called from native)
+    window.fetchLyrics = fetchLyrics;
+    
+    // Global function to receive lyrics data (for async callback)
+    window.onLyricsLoaded = function(data) {
+        if (typeof data === 'string') {
+            try {
+                data = JSON.parse(data);
+            } catch (e) {
+                console.error('Error parsing lyrics data:', e);
+                return;
             }
-        });
-    });
+        }
+        handleLyricsLoaded(data);
+    };
 
     // ========== INITIALIZATION ==========
 
     // Initial display
     updateTimeDisplay();
-    updateLyricsHighlight();
 
     console.log('Player UI initialized');
 });

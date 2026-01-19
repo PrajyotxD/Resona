@@ -1014,6 +1014,149 @@ public class PlayerHelper implements MusicPlaybackManager.PlaybackListener {
         return String.format(Locale.US, "%d:%02d", minutes, seconds);
     }
     
+    // ========== LYRICS ==========
+    
+    /**
+     * Get lyrics for current song synchronously
+     * Returns JSON with synced lyrics and timing info
+     * 
+     * @return JSON string with lyrics data or empty object if not found
+     */
+    @JavascriptInterface
+    public String getLyrics() {
+        Log.d(TAG, "JS: getLyrics()");
+        Song song = getCurrentSongObject();
+        if (song == null) {
+            return "{}";
+        }
+        
+        try {
+            music.resona.lyrics.LyricsManager manager = music.resona.lyrics.LyricsManager.getInstance();
+            music.resona.lyrics.LyricsResult result = manager.getLyricsSync(
+                song.getTitle(),
+                song.getArtist() != null ? song.getArtist() : "",
+                song.getAlbum(),
+                song.getDurationSeconds() * 1000L,
+                song.getVideoId(),
+                true // prefer synced
+            );
+            
+            return lyricsResultToJson(result);
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting lyrics", e);
+            return "{}";
+        }
+    }
+    
+    /**
+     * Get lyrics asynchronously and call JavaScript callback when ready
+     * 
+     * @param callbackName JavaScript function name to call with result
+     */
+    @JavascriptInterface
+    public void getLyricsAsync(final String callbackName) {
+        Log.d(TAG, "JS: getLyricsAsync(" + callbackName + ")");
+        Song song = getCurrentSongObject();
+        if (song == null) {
+            return;
+        }
+        
+        final String title = song.getTitle();
+        final String artist = song.getArtist() != null ? song.getArtist() : "";
+        final String album = song.getAlbum();
+        final long durationMs = song.getDurationSeconds() * 1000L;
+        final String videoId = song.getVideoId();
+        
+        music.resona.lyrics.LyricsManager.getInstance().getLyricsAsync(
+            title, artist, album, durationMs, videoId, true,
+            new music.resona.lyrics.LyricsManager.LyricsCallback() {
+                @Override
+                public void onLyricsLoaded(music.resona.lyrics.LyricsResult result) {
+                    String json = lyricsResultToJson(result);
+                    Log.d(TAG, "Lyrics loaded, calling callback: " + callbackName);
+                    // Call JavaScript callback
+                    runOnMainThread(() -> {
+                        if (activityRef != null && activityRef.get() != null) {
+                            android.app.Activity activity = activityRef.get();
+                            if (activity instanceof music.resona.MainActivity) {
+                                // For PlayerFragment's WebView
+                                // The callback will be invoked via the global window function
+                            }
+                        }
+                    });
+                }
+                
+                @Override
+                public void onError(Exception e) {
+                    Log.e(TAG, "Error loading lyrics async", e);
+                }
+            }
+        );
+    }
+    
+    /**
+     * Prefetch lyrics for a song (call when song starts loading)
+     */
+    @JavascriptInterface
+    public void prefetchLyrics() {
+        Song song = getCurrentSongObject();
+        if (song == null) return;
+        
+        music.resona.lyrics.LyricsManager.getInstance().prefetchLyrics(
+            song.getTitle(),
+            song.getArtist() != null ? song.getArtist() : "",
+            song.getAlbum(),
+            song.getDurationSeconds() * 1000L,
+            song.getVideoId()
+        );
+    }
+    
+    /**
+     * Check if lyrics are cached for current song
+     */
+    @JavascriptInterface
+    public boolean hasLyrics() {
+        Song song = getCurrentSongObject();
+        if (song == null) return false;
+        
+        return music.resona.lyrics.LyricsManager.getInstance().hasCachedLyrics(
+            song.getTitle(),
+            song.getArtist() != null ? song.getArtist() : ""
+        );
+    }
+    
+    /**
+     * Convert LyricsResult to JSON string for JavaScript
+     */
+    private String lyricsResultToJson(music.resona.lyrics.LyricsResult result) {
+        if (result == null) {
+            return "{}";
+        }
+        
+        try {
+            JSONObject json = new JSONObject();
+            json.put("provider", result.getProviderName());
+            json.put("isSynced", result.isSynced());
+            json.put("plainLyrics", result.getPlainLyrics());
+            
+            if (result.isSynced()) {
+                JSONArray linesArray = new JSONArray();
+                for (music.resona.lyrics.LyricsResult.SyncedLine line : result.getSyncedLines()) {
+                    JSONObject lineObj = new JSONObject();
+                    lineObj.put("time", line.getTimeMs());
+                    lineObj.put("text", line.getText());
+                    linesArray.put(lineObj);
+                }
+                json.put("syncedLines", linesArray);
+            }
+            
+            return json.toString();
+        } catch (JSONException e) {
+            Log.e(TAG, "Error converting lyrics to JSON", e);
+            return "{}";
+        }
+    }
+    
     // ========== PLAYBACK LISTENER (Forward to JavaScript) ==========
     
     @Override

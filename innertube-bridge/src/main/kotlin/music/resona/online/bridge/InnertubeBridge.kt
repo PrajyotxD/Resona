@@ -1196,7 +1196,7 @@ object InnertubeBridge {
     // ========== SYNCHRONOUS ADVANCED FUNCTIONALITY ==========
     
     /**
-     * Gets lyrics for a video synchronously.
+     * Gets lyrics for a video synchronously using the browseId.
      * Executes on background thread to avoid blocking the main thread.
      */
     @JvmStatic
@@ -1205,6 +1205,36 @@ object InnertubeBridge {
             runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
                 val endpoint = com.metrolist.innertube.models.BrowseEndpoint(browseId, params)
                 YouTube.lyrics(endpoint).getOrThrow() ?: "No lyrics available"
+            }
+        }
+    }
+    
+    /**
+     * Gets lyrics for a video by videoId synchronously.
+     * This fetches the next endpoint first to get the lyrics browseId.
+     * Executes on background thread to avoid blocking the main thread.
+     * 
+     * @param videoId The YouTube video ID
+     * @return Lyrics text or "No lyrics available" if not found
+     */
+    @JvmStatic
+    fun getLyricsByVideoIdSync(videoId: String): String {
+        return ExceptionConverter.convertExceptions {
+            runBlocking(backgroundExecutor.asCoroutineDispatcher()) {
+                // First get the next endpoint to find the lyrics browseId
+                val watchEndpoint = com.metrolist.innertube.models.WatchEndpoint(
+                    videoId = videoId,
+                    playlistId = null
+                )
+                val nextResult = YouTube.next(watchEndpoint).getOrThrow()
+                
+                // Check if lyrics endpoint is available
+                val lyricsEndpoint = nextResult.lyricsEndpoint
+                if (lyricsEndpoint != null) {
+                    YouTube.lyrics(lyricsEndpoint).getOrThrow() ?: "No lyrics available"
+                } else {
+                    "No lyrics available"
+                }
             }
         }
     }

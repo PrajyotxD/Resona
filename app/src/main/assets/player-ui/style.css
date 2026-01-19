@@ -1,8 +1,17 @@
+/* Akatski Font for Player UI */
+@font-face {
+    font-family: 'Akatski';
+    src: url('../fonts/akatski.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
     --bg-color: #121212;
     --text-primary: #ffffff;
     --text-secondary: rgba(255, 255, 255, 0.6);
-    --accent-color: #ffffff;
+    --accent-color: #1DB954; /* Spotify green accent */
     --glass-bg: rgba(255, 255, 255, 0.08);
     --glass-border: rgba(255, 255, 255, 0.1);
     --control-bg: rgba(255, 255, 255, 0.12);
@@ -10,13 +19,17 @@
     --vh: 1vh;
     /* Navigation bar height - injected from Android */
     --nav-bar-height: 0px;
+    /* Lyrics colors */
+    --lyrics-active: #ffffff;
+    --lyrics-inactive: rgba(255, 255, 255, 0.3);
+    --lyrics-past: rgba(255, 255, 255, 0.5);
 }
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family: 'Akatski', -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     -webkit-tap-highlight-color: transparent;
 }
 
@@ -303,29 +316,132 @@ body {
     flex-shrink: 0;
 }
 
+/* Spotify-like Lyrics Container */
 .lyrics-content {
     flex: 1;
     overflow-y: auto;
-    padding-bottom: 40vh; /* Allow scrolling last lines to center */
-    mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
-    -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
-    scrollbar-width: none;
+    overflow-x: hidden;
+    padding: 20vh 16px 50vh 16px; /* Top padding to start lyrics lower, bottom for scroll */
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
 }
 
+/* Custom Scrollbar - Spotify style */
 .lyrics-content::-webkit-scrollbar {
-    display: none;
+    width: 4px;
 }
 
+.lyrics-content::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+}
+
+.lyrics-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+.lyrics-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Firefox scrollbar */
+.lyrics-content {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.3) rgba(255, 255, 255, 0.05);
+}
+
+/* Spotify-like Lyric Lines */
 .lyric-line {
-    font-size: 24px;
-    font-weight: 800;
-    line-height: 1.3;
-    margin-bottom: 20px;
-    color: rgba(255, 255, 255, 0.2);
-    transition: all 0.4s ease;
+    font-family: 'Akatski', -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.4;
+    margin-bottom: 24px;
+    padding: 8px 0;
+    color: var(--lyrics-inactive);
+    transition: color 0.3s ease, transform 0.3s ease, opacity 0.3s ease;
+    cursor: pointer;
+    will-change: color, transform;
 }
 
+.lyric-line:hover {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+/* Active/Current lyric - Spotify style */
 .lyric-line.active {
-    color: white;
-    transform: scale(1.04);
+    color: var(--lyrics-active);
+    font-size: 32px;
+    transform: scale(1.02);
+}
+
+/* Past lyrics (already played) */
+.lyric-line.past {
+    color: var(--lyrics-past);
+}
+
+/* Loading state - centered */
+.lyrics-loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 16px;
+}
+
+.lyrics-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent-color);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.lyrics-loading-text {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+.lyric-line.loading,
+.lyric-line.no-lyrics {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 20px;
+    font-weight: 500;
+    text-align: center;
+    padding-top: 30vh;
+    cursor: default;
+}
+
+/* No lyrics available state */
+.no-lyrics-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.no-lyrics-icon {
+    font-size: 48px;
+    opacity: 0.5;
+}
+
+.no-lyrics-text {
+    font-size: 18px;
+    font-weight: 500;
+}
+
+.no-lyrics-subtext {
+    font-size: 14px;
+    opacity: 0.7;
 }
