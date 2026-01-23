@@ -183,6 +183,19 @@ body {
     margin-top: 2px;
 }
 
+/* Clickable artist names */
+.artist-name.clickable {
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    text-decoration: none;
+}
+
+.artist-name.clickable:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
 .track-actions {
     display: flex;
     gap: 8px;

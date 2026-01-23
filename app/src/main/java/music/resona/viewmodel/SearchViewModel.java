@@ -36,6 +36,9 @@ public class SearchViewModel extends ViewModel {
     private Runnable pendingSearchRunnable;
     @Nullable
     private String continuationToken;
+    
+    // Cache last search results for later retrieval
+    private List<YTItemResult> cachedSearchResults = new ArrayList<>();
 
     @NonNull
     public LiveData<List<YTItemResult>> getSearchResults() {
@@ -144,6 +147,28 @@ public class SearchViewModel extends ViewModel {
     }
 
     /**
+     * Get cached search results for a specific video ID.
+     * Used to retrieve artist info from search results.
+     */
+    @Nullable
+    public YTItemResult getItemByVideoId(@NonNull String videoId) {
+        for (YTItemResult item : cachedSearchResults) {
+            if (videoId.equals(item.getId())) {
+                return item;
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Get all cached search results.
+     */
+    @NonNull
+    public List<YTItemResult> getCachedResults() {
+        return new ArrayList<>(cachedSearchResults);
+    }
+    
+    /**
      * Clears search results and resets state.
      */
     public void clearSearch() {
@@ -164,7 +189,10 @@ public class SearchViewModel extends ViewModel {
         SearchCallback callback = new SearchCallback() {
             @Override
             public void onSuccess(@NonNull SearchResult result) {
-                searchResults.setValue(new ArrayList<>(result.getItems()));
+                List<YTItemResult> items = result.getItems();
+                searchResults.setValue(new ArrayList<>(items));
+                // Cache results for later retrieval
+                cachedSearchResults = new ArrayList<>(items);
                 continuationToken = result.getContinuation();
                 isLoading.setValue(false);
             }

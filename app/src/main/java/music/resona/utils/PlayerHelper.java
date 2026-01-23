@@ -1031,10 +1031,19 @@ public class PlayerHelper implements MusicPlaybackManager.PlaybackListener {
         }
         
         try {
+            // Use artistNames array if available for better search results
+            String artist = song.getArtist();
+            if (song.hasArtistInfo() && song.getArtistNames() != null && song.getArtistNames().length > 0) {
+                // Join all artist names with comma for comprehensive search
+                artist = String.join(", ", song.getArtistNames());
+            } else if (artist == null || artist.isEmpty()) {
+                artist = "Unknown Artist";
+            }
+            
             music.resona.lyrics.LyricsManager manager = music.resona.lyrics.LyricsManager.getInstance();
             music.resona.lyrics.LyricsResult result = manager.getLyricsSync(
                 song.getTitle(),
-                song.getArtist() != null ? song.getArtist() : "",
+                artist,
                 song.getAlbum(),
                 song.getDurationSeconds() * 1000L,
                 song.getVideoId(),
@@ -1095,6 +1104,64 @@ public class PlayerHelper implements MusicPlaybackManager.PlaybackListener {
     }
     
     /**
+     * Get current song artist browse IDs as JSON array
+     * Returns array of {browseId, name} objects for each artist
+     * 
+     * @return JSON string with artist info or empty array
+     */
+    @JavascriptInterface
+    public String getArtistInfo() {
+        Song song = getCurrentSongObject();
+        if (song == null || !song.hasArtistInfo()) {
+            return "[]";
+        }
+        
+        try {
+            JSONArray artists = new JSONArray();
+            String[] browseIds = song.getArtistBrowseIds();
+            String[] names = song.getArtistNames();
+            
+            if (browseIds != null && names != null) {
+                int count = Math.min(browseIds.length, names.length);
+                for (int i = 0; i < count; i++) {
+                    JSONObject artist = new JSONObject();
+                    artist.put("browseId", browseIds[i]);
+                    artist.put("name", names[i]);
+                    artists.put(artist);
+                }
+            }
+            
+            return artists.toString();
+        } catch (Exception e) {
+            Log.e(TAG, "Error getting artist info", e);
+            return "[]";
+        }
+    }
+    
+    /**
+     * Open artist page in the app
+     * 
+     * @param browseId Artist browse ID
+     * @param artistName Artist display name
+     */
+    @JavascriptInterface
+    public void openArtistPage(String browseId, String artistName) {
+        Log.d(TAG, "JS: openArtistPage(" + browseId + ", " + artistName + ")");
+        runOnMainThread(() -> {
+            android.app.Activity activity = activityRef != null ? activityRef.get() : null;
+            if (activity == null || activity.isFinishing()) {
+                Log.w(TAG, "Cannot open artist page: no valid activity reference");
+                return;
+            }
+            
+            if (activity instanceof music.resona.MainActivity) {
+                music.resona.MainActivity mainActivity = (music.resona.MainActivity) activity;
+                mainActivity.openArtistPage(browseId, artistName);
+            }
+        });
+    }
+    
+    /**
      * Prefetch lyrics for a song (call when song starts loading)
      */
     @JavascriptInterface
@@ -1102,9 +1169,18 @@ public class PlayerHelper implements MusicPlaybackManager.PlaybackListener {
         Song song = getCurrentSongObject();
         if (song == null) return;
         
+        // Use artistNames array if available for better search results
+        String artist = song.getArtist();
+        if (song.hasArtistInfo() && song.getArtistNames() != null && song.getArtistNames().length > 0) {
+            // Join all artist names with comma for comprehensive search
+            artist = String.join(", ", song.getArtistNames());
+        } else if (artist == null || artist.isEmpty()) {
+            artist = "Unknown Artist";
+        }
+        
         music.resona.lyrics.LyricsManager.getInstance().prefetchLyrics(
             song.getTitle(),
-            song.getArtist() != null ? song.getArtist() : "",
+            artist,
             song.getAlbum(),
             song.getDurationSeconds() * 1000L,
             song.getVideoId()

@@ -557,12 +557,17 @@ public class QuickPicksRepository {
          */
         private YTItemResult convertToYTItem(QuickPicksDatabase.QuickPickSong song) {
             List<music.resona.online.bridge.models.ArtistResult> artists = new ArrayList<>();
-            if (song.artist != null) {
-                artists.add(new music.resona.online.bridge.models.ArtistResult(
-                    song.artistId != null ? song.artistId : "",
-                    song.artist
-                ));
+            
+            // Use "Unknown Artist" if artist is null or empty (for old database records)
+            String artistName = song.artist;
+            if (artistName == null || artistName.trim().isEmpty()) {
+                artistName = "Unknown Artist";
             }
+            
+            artists.add(new music.resona.online.bridge.models.ArtistResult(
+                song.artistId != null ? song.artistId : "",
+                artistName
+            ));
             
             return new YTItemResult(
                 song.videoId,           // id

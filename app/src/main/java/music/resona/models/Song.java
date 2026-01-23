@@ -20,6 +20,10 @@ public class Song implements Parcelable {
     private final int durationSeconds;
     private final String playlistId;
     
+    // Artist browse IDs for navigation (multiple artists supported)
+    private String[] artistBrowseIds;
+    private String[] artistNames;
+    
     // Cached stream URL for instant playback
     private String cachedStreamUrl;
     private long streamUrlExpiry;
@@ -57,6 +61,8 @@ public class Song implements Parcelable {
         thumbnailUrl = in.readString();
         durationSeconds = in.readInt();
         playlistId = in.readString();
+        artistBrowseIds = in.createStringArray();
+        artistNames = in.createStringArray();
         cachedStreamUrl = in.readString();
         streamUrlExpiry = in.readLong();
     }
@@ -70,6 +76,8 @@ public class Song implements Parcelable {
         dest.writeString(thumbnailUrl);
         dest.writeInt(durationSeconds);
         dest.writeString(playlistId);
+        dest.writeStringArray(artistBrowseIds);
+        dest.writeStringArray(artistNames);
         dest.writeString(cachedStreamUrl);
         dest.writeLong(streamUrlExpiry);
     }
@@ -142,6 +150,26 @@ public class Song implements Parcelable {
     
     public boolean hasValidStreamUrl() {
         return cachedStreamUrl != null && System.currentTimeMillis() < streamUrlExpiry;
+    }
+    
+    // Artist browse ID methods
+    public void setArtistInfo(@Nullable String[] browseIds, @Nullable String[] names) {
+        this.artistBrowseIds = browseIds;
+        this.artistNames = names;
+    }
+    
+    @Nullable
+    public String[] getArtistBrowseIds() {
+        return artistBrowseIds;
+    }
+    
+    @Nullable
+    public String[] getArtistNames() {
+        return artistNames;
+    }
+    
+    public boolean hasArtistInfo() {
+        return artistBrowseIds != null && artistBrowseIds.length > 0;
     }
     
     @NonNull

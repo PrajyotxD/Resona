@@ -410,6 +410,22 @@ public class MusicPlaybackManager {
                         item.getThumbnail(),
                         item.getDuration() != null ? item.getDuration() : 0
                     );
+                    
+                    // Extract artist browse IDs and names
+                    if (item.getArtists() != null && !item.getArtists().isEmpty()) {
+                        List<music.resona.online.bridge.models.ArtistResult> artists = item.getArtists();
+                        String[] browseIds = new String[artists.size()];
+                        String[] names = new String[artists.size()];
+                        
+                        for (int i = 0; i < artists.size(); i++) {
+                            music.resona.online.bridge.models.ArtistResult artistResult = artists.get(i);
+                            browseIds[i] = artistResult.getId();
+                            names[i] = artistResult.getName();
+                        }
+                        
+                        song.setArtistInfo(browseIds, names);
+                    }
+                    
                     songs.add(song);
                 }
             }

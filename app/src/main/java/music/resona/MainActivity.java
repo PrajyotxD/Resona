@@ -19,6 +19,7 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 
+import music.resona.fragment.ArtistFragment;
 import music.resona.fragment.SearchFragment;
 import xyz.code.navigationbar.NavigationBar;
 
@@ -668,5 +669,29 @@ public class MainActivity extends AppCompatActivity implements MusicPlaybackMana
         
         transaction.commit();
         currentFragment = fragment;
+    }
+    
+    /**
+     * Open artist page from player or other components
+     * 
+     * @param browseId Artist browse ID
+     * @param artistName Artist display name
+     */
+    public void openArtistPage(@NonNull String browseId, @NonNull String artistName) {
+        Log.d(TAG, "Opening artist page: " + artistName + " (" + browseId + ")");
+        
+        ArtistFragment artistFragment = ArtistFragment.newInstance(browseId, artistName);
+        
+        getSupportFragmentManager()
+            .beginTransaction()
+            .setCustomAnimations(
+                android.R.anim.fade_in,
+                android.R.anim.fade_out,
+                android.R.anim.fade_in,
+                android.R.anim.fade_out
+            )
+            .replace(R.id.fragment_container, artistFragment, "ArtistFragment")
+            .addToBackStack("artist")
+            .commit();
     }
 }

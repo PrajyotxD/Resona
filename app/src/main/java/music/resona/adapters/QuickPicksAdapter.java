@@ -20,6 +20,7 @@ import java.util.List;
 import music.resona.MainActivity;
 import music.resona.R;
 import music.resona.models.Song;
+import music.resona.online.bridge.models.ArtistResult;
 import music.resona.online.bridge.models.YTItemResult;
 import music.resona.utils.UiUXUtil;
 
@@ -141,6 +142,10 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
         }
         
         String artistName = getArtistName(item);
+        // Fallback to "Unknown Artist" if no artist info
+        if (artistName == null || artistName.isEmpty()) {
+            artistName = "Unknown Artist";
+        }
         Integer duration = item.getDuration();
         
         Song song = new Song(
@@ -151,6 +156,21 @@ public class QuickPicksAdapter extends RecyclerView.Adapter<QuickPicksAdapter.Qu
             item.getThumbnail(),
             duration != null ? duration : 0
         );
+        
+        // Populate artist info for clickable navigation
+        if (item.getArtists() != null && !item.getArtists().isEmpty()) {
+            List<ArtistResult> artists = item.getArtists();
+            String[] browseIds = new String[artists.size()];
+            String[] names = new String[artists.size()];
+            
+            for (int i = 0; i < artists.size(); i++) {
+                ArtistResult artist = artists.get(i);
+                browseIds[i] = artist.getId();
+                names[i] = artist.getName();
+            }
+            
+            song.setArtistInfo(browseIds, names);
+        }
         
         // Play radio mode for continuous playback (auto-queues similar songs)
         if (context instanceof MainActivity) {

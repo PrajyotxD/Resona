@@ -259,6 +259,24 @@ public class HomeFeedViewModel extends ViewModel {
     }
     
     /**
+     * Manually update Quick Picks with a new list (used for refresh).
+     */
+    public void updateQuickPicks(@NonNull List<YTItemResult> picks) {
+        Log.d(TAG, "Manually updating Quick Picks: " + picks.size() + " items");
+        
+        // Store full list for pagination
+        allQuickPicks = new ArrayList<>(picks);
+        quickPicksCurrentPage = 0;
+        
+        // Return only first page initially (20 items)
+        int initialSize = Math.min(QUICK_PICKS_PAGE_SIZE, picks.size());
+        List<YTItemResult> firstPage = picks.subList(0, initialSize);
+        
+        quickPicks.setValue(firstPage);
+        Log.d(TAG, "Set Quick Picks to first page: " + firstPage.size() + " items (total: " + allQuickPicks.size() + ")");
+    }
+    
+    /**
      * Filters home feed by chip selection.
      */
     public void filterByChip(@NonNull ChipResult chip) {

@@ -256,6 +256,10 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
         }
         
         String artistName = getFirstArtistName(item);
+        // Fallback to "Unknown Artist" if no artist info
+        if (artistName == null || artistName.isEmpty()) {
+            artistName = "Unknown Artist";
+        }
         Integer duration = item.getDuration();
         
         Song song = new Song(
@@ -266,6 +270,21 @@ public class HomeItemAdapter extends RecyclerView.Adapter<HomeItemAdapter.ItemVi
             item.getThumbnail(),
             duration != null ? duration : 0
         );
+        
+        // Populate artist info for clickable navigation
+        if (item.getArtists() != null && !item.getArtists().isEmpty()) {
+            List<music.resona.online.bridge.models.ArtistResult> artists = item.getArtists();
+            String[] browseIds = new String[artists.size()];
+            String[] names = new String[artists.size()];
+            
+            for (int i = 0; i < artists.size(); i++) {
+                music.resona.online.bridge.models.ArtistResult artist = artists.get(i);
+                browseIds[i] = artist.getId();
+                names[i] = artist.getName();
+            }
+            
+            song.setArtistInfo(browseIds, names);
+        }
         
         // Play through MainActivity
         if (context instanceof MainActivity) {

@@ -21,6 +21,7 @@ import androidx.fragment.app.Fragment;
 import androidx.lifecycle.ViewModelProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import com.bumptech.glide.Glide;
 import com.bumptech.glide.load.engine.DiskCacheStrategy;
@@ -67,6 +68,7 @@ public class HomeFeed extends Fragment {
     private AccountInfoViewModel accountInfoViewModel;
     
     // Views
+    private SwipeRefreshLayout swipeRefreshLayout;
     private NestedScrollView scrollView;
     private RecyclerView sectionsRecyclerView;
     private RecyclerView quickPicksRecyclerView;
@@ -126,6 +128,7 @@ public class HomeFeed extends Fragment {
     }
     
     private void initializeViews(@NonNull View view) {
+        swipeRefreshLayout = view.findViewById(R.id.swipe_refresh_layout);
         scrollView = view.findViewById(R.id.home_scroll_container);
         sectionsRecyclerView = view.findViewById(R.id.recyclerview_sections);
         quickPicksRecyclerView = view.findViewById(R.id.rv_quick_picks);
@@ -136,6 +139,9 @@ public class HomeFeed extends Fragment {
         profileImageView = view.findViewById(R.id.home_profile_avatar);
         greetingTextView = view.findViewById(R.id.home_greeting_text);
         usernameTextView = view.findViewById(R.id.home_username_text);
+        
+        // Setup pull-to-refresh
+        setupSwipeRefresh();
         
         // Start animated gradient background
         View rootView = view.findViewById(R.id.home_feed_root);
@@ -158,6 +164,62 @@ public class HomeFeed extends Fragment {
     private void initializeViewModels() {
         viewModel = new ViewModelProvider(this).get(HomeFeedViewModel.class);
         accountInfoViewModel = new ViewModelProvider(requireActivity()).get(AccountInfoViewModel.class);
+    }
+    
+    private void setupSwipeRefresh() {
+        if (swipeRefreshLayout == null) return;
+        
+        // Set refresh colors to match app theme
+        swipeRefreshLayout.setColorSchemeColors(
+            getResources().getColor(android.R.color.holo_red_light),
+            getResources().getColor(android.R.color.holo_blue_light),
+            getResources().getColor(android.R.color.holo_orange_light),
+            getResources().getColor(android.R.color.holo_green_light)
+        );
+        swipeRefreshLayout.setProgressBackgroundColorSchemeColor(
+            getResources().getColor(android.R.color.transparent)
+        );
+        
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            Log.d(TAG, "Pull-to-refresh triggered");
+            refreshAllData();
+        });
+    }
+    
+    private void refreshAllData() {
+        // Reset state for fresh load
+        previousSectionCount = 0;
+        personalizedSectionsAdded = false;
+        cachedPersonalizedSections.clear();
+        
+        // Refresh API data (home feed sections)
+        viewModel.refresh();
+        
+        // Refresh local data (personalized sections and Quick Picks)
+        viewModel.loadPersonalizedSections();
+        
+        // Force reload Quick Picks from database
+        if (requireContext() != null) {
+            new music.resona.playback.QuickPicksManager(requireContext())
+                .generateQuickPicks(new music.resona.playback.QuickPicksManager.QuickPicksCallback() {
+                    @Override
+                    public void onQuickPicksGenerated(List<YTItemResult> picks, boolean personalized) {
+                        requireActivity().runOnUiThread(() -> {
+                            Log.d(TAG, "Quick Picks refreshed: " + picks.size() + " items (personalized: " + personalized + ")");
+                            if (!picks.isEmpty()) {
+                                viewModel.updateQuickPicks(picks);
+                            }
+                        });
+                    }
+                    
+                    @Override
+                    public void onError(String error) {
+                        Log.e(TAG, "Failed to refresh Quick Picks: " + error);
+                    }
+                });
+        }
+        
+        Log.d(TAG, "Refreshing all data: API sections, personalized sections, and Quick Picks");
     }
     
     private void setupRecyclerViews() {
@@ -470,11 +532,19 @@ public class HomeFeed extends Fragment {
         
         switch (state) {
             case INITIAL_LOAD:
-            case REFRESHING:
                 // Show skeleton only for initial load
                 if (sectionsAdapter == null || sectionsAdapter.getItemCount() == 0) {
                     skeletonLoader.setVisibility(View.VISIBLE);
                 }
+                paginationLoader.setVisibility(View.GONE);
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
+                break;
+                
+            case REFRESHING:
+                // For refresh, don't show skeleton if we already have content
+                // SwipeRefreshLayout will show its own indicator
                 paginationLoader.setVisibility(View.GONE);
                 break;
                 
@@ -485,12 +555,18 @@ public class HomeFeed extends Fragment {
                 // Ensure it's above navigation
                 paginationLoader.setElevation(16);
                 paginationLoader.bringToFront();
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
                 break;
                 
             case IDLE:
                 // Hide all loaders
                 skeletonLoader.setVisibility(View.GONE);
                 paginationLoader.setVisibility(View.GONE);
+                if (swipeRefreshLayout != null) {
+                    swipeRefreshLayout.setRefreshing(false);
+                }
                 break;
         }
     }
@@ -581,6 +657,7 @@ public class HomeFeed extends Fragment {
         // Clear references to prevent memory leaks but keep state flags
         // previousSectionCount is kept to track pagination
         // hasLoadedData is kept to prevent reload on tab switch
+        swipeRefreshLayout = null;
         scrollView = null;
         sectionsRecyclerView = null;
         quickPicksRecyclerView = null;

@@ -306,15 +306,19 @@ public class MusicService extends Service implements Player.Listener {
             // Record song in database with play event
             new Thread(() -> {
                 try {
+                    String artist = currentSong.getArtist();
+                    if (artist == null || artist.trim().isEmpty()) {
+                        artist = "Unknown Artist";
+                    }
                     database.insertOrUpdateSong(
                         currentSong.getVideoId(),
                         currentSong.getTitle(),
-                        currentSong.getArtist(),
+                        artist,
                         "", // artistId - we don't have it here
                         currentSong.getThumbnailUrl(),
                         currentSong.getDurationSeconds()
                     );
-                    Log.d(TAG, "Recorded song in database: " + currentSong.getTitle());
+                    Log.d(TAG, "Recorded song in database: " + currentSong.getTitle() + " by " + artist);
                 } catch (Exception e) {
                     Log.e(TAG, "Failed to record song in database", e);
                 }
@@ -956,11 +960,16 @@ public class MusicService extends Service implements Player.Listener {
         try {
             executor.execute(() -> {
                 try {
+                    String artist = song.getArtist();
+                    if (artist == null || artist.trim().isEmpty()) {
+                        artist = "Unknown Artist";
+                    }
+                    
                     // Record song in database for personalized recommendations
                     database.insertOrUpdateSong(
                         song.getVideoId(),
                         song.getTitle(),
-                        song.getArtist(),
+                        artist,
                         "", // artistId - not available in Song model
                         song.getThumbnailUrl(),
                         song.getDurationSeconds()
@@ -974,7 +983,7 @@ public class MusicService extends Service implements Player.Listener {
                     recommendationDb.recordPlay(
                         song.getVideoId(),
                         song.getTitle(),
-                        song.getArtist(),
+                        artist,
                         "", // artistId - not available in Song model
                         song.getAlbum(),
                         "", // albumId - not available in Song model

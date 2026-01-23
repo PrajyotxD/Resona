@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lyricLines = document.querySelectorAll('.lyric-line');
     const lyricsContent = document.querySelector('.lyrics-content');
     const trackTitle = document.querySelector('.track-title');
-    const trackArtist = document.querySelector('.track-artist');
+    const trackArtistContainer = document.querySelector('.track-artist-container');
     const albumArt = document.querySelector('.album-art');
     const prevBtn = document.querySelector('.prev-btn');
     const nextBtn = document.querySelector('.next-btn');
@@ -65,13 +65,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const newArtist = artist || 'Unknown Artist';
         
         // Check if song changed
-        const songChanged = !(trackTitle && trackTitle.textContent === newTitle && 
-            trackArtist && trackArtist.textContent === newArtist);
+        const currentTitle = trackTitle ? trackTitle.textContent : '';
+        const songChanged = currentTitle !== newTitle;
         
         if (songChanged) {
             console.log('updateSongInfo:', title, artist);
             if (trackTitle) trackTitle.textContent = newTitle;
-            if (trackArtist) trackArtist.textContent = newArtist;
+            
+            // Render clickable artist names
+            renderArtistNames(newArtist);
+            
             if (albumArt && thumbnailUrl) {
                 albumArt.src = thumbnailUrl;
             }
@@ -82,15 +85,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (lyricsTitle) lyricsTitle.textContent = newTitle;
             if (lyricsArtist) lyricsArtist.textContent = newArtist;
             
-            // Reset lyrics for new song
+            // Reset lyrics for new song - CRITICAL for sync reliability
             lyricsData = null;
             syncedLyrics = [];
             currentLyricIndex = -1;
+            isLoadingLyrics = false;
             
-            // If lyrics view is open, show loading and fetch new lyrics
+            // Clear any existing lyrics display and remove all styling
+            if (lyricsContent) {
+                const oldLines = lyricsContent.querySelectorAll('.lyric-line');
+                oldLines.forEach(line => {
+                    line.classList.remove('active', 'past');
+                });
+                lyricsContent.innerHTML = '';
+            }
+            
+            // If lyrics view is open, show loading and fetch new lyrics IMMEDIATELY
             if (lyricsView && lyricsView.classList.contains('active') && hasNativePlayer) {
                 showLyricsLoading();
-                fetchLyrics();
+                setTimeout(() => fetchLyrics(), 10);
             } else if (lyricsContent) {
                 // Pre-show loading state so it's ready when user opens lyrics
                 showLyricsLoading();
@@ -295,19 +308,27 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lyricsToggle) {
         lyricsToggle.addEventListener('click', () => {
             if (mainView && lyricsView) {
-                // Open lyrics view IMMEDIATELY
+                // 1. Show loading state FIRST (if needed)
+                if (!lyricsData && hasNativePlayer && lyricsContent) {
+                    showLyricsLoading();
+                }
+                
+                // 2. Switch views IMMEDIATELY - don't wait for anything
                 mainView.classList.remove('active');
                 lyricsView.classList.add('active');
                 
-                // Show loading or scroll to active lyric
-                if (!lyricsData && hasNativePlayer) {
-                    // Show loading spinner immediately
-                    showLyricsLoading();
-                    // Fetch lyrics in background
-                    fetchLyrics();
-                } else if (lyricsData && syncedLyrics.length > 0) {
-                    // Already have lyrics, scroll to current line
-                    setTimeout(scrollToActiveLyric, 100);
+                // 3. After view is open, handle lyrics
+                if (hasNativePlayer) {
+                    if (!lyricsData) {
+                        // No lyrics loaded - fetch asynchronously (don't block UI)
+                        setTimeout(() => fetchLyrics(), 10);
+                    } else {
+                        // Already have lyrics, but verify they're for current song
+                        // and scroll to current line
+                        if (syncedLyrics && syncedLyrics.length > 0) {
+                            setTimeout(scrollToActiveLyric, 100);
+                        }
+                    }
                 }
             }
         });
@@ -631,6 +652,86 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${mins}:${secs.toString().padStart(2, '0')}`;
     }
 
+    // ========== ARTIST NAVIGATION ==========
+    
+    /**
+     * Render artist names as clickable elements (Spotify-style)
+     * Fetches artist browse IDs from native and creates clickable links
+     */
+    function renderArtistNames(artistString) {
+        if (!trackArtistContainer) return;
+        
+        trackArtistContainer.innerHTML = '';
+        
+        if (!hasNativePlayer) {
+            // Fallback: show plain text
+            const p = document.createElement('p');
+            p.className = 'track-artist';
+            p.textContent = artistString;
+            trackArtistContainer.appendChild(p);
+            return;
+        }
+        
+        try {
+            // Get artist info from native
+            const artistInfoJson = PlayerHelper.getArtistInfo();
+            const artistInfo = JSON.parse(artistInfoJson);
+            
+            if (artistInfo && artistInfo.length > 0) {
+                // Multiple artists - create clickable spans with commas
+                const container = document.createElement('p');
+                container.className = 'track-artist';
+                
+                artistInfo.forEach((artist, index) => {
+                    // Create clickable artist name
+                    const artistSpan = document.createElement('span');
+                    artistSpan.className = 'artist-name clickable';
+                    artistSpan.textContent = artist.name;
+                    artistSpan.addEventListener('click', () => {
+                        openArtistPage(artist.browseId, artist.name);
+                    });
+                    container.appendChild(artistSpan);
+                    
+                    // Add comma separator (not clickable)
+                    if (index < artistInfo.length - 1) {
+                        const comma = document.createElement('span');
+                        comma.textContent = ', ';
+                        container.appendChild(comma);
+                    }
+                });
+                
+                trackArtistContainer.appendChild(container);
+            } else {
+                // No artist info available, show plain text
+                const p = document.createElement('p');
+                p.className = 'track-artist';
+                p.textContent = artistString;
+                trackArtistContainer.appendChild(p);
+            }
+        } catch (e) {
+            console.error('Error rendering artist names:', e);
+            // Fallback
+            const p = document.createElement('p');
+            p.className = 'track-artist';
+            p.textContent = artistString;
+            trackArtistContainer.appendChild(p);
+        }
+    }
+    
+    /**
+     * Open artist page in the app
+     */
+    function openArtistPage(browseId, artistName) {
+        if (!hasNativePlayer) return;
+        
+        try {
+            console.log('Opening artist page:', artistName, browseId);
+            PlayerHelper.openArtistPage(browseId, artistName);
+        } catch (e) {
+            console.error('Error opening artist page:', e);
+        }
+    }
+
     // ========== LYRICS SYSTEM ==========
     
     // Lyrics state is declared at the top of the script
@@ -672,14 +773,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.isSynced && data.syncedLines && data.syncedLines.length > 0) {
             // Time-synced lyrics
             syncedLyrics = data.syncedLines;
+            currentLyricIndex = -1;
             renderSyncedLyrics();
             console.log('Loaded ' + syncedLyrics.length + ' synced lyrics lines from ' + data.provider);
         } else if (data.plainLyrics) {
-            // Plain text lyrics
+            // Plain text lyrics - clear sync state completely
             syncedLyrics = [];
+            currentLyricIndex = -1;
             renderPlainLyrics(data.plainLyrics);
             console.log('Loaded plain lyrics from ' + data.provider);
         } else {
+            // No lyrics available
+            syncedLyrics = [];
+            currentLyricIndex = -1;
             showNoLyrics();
         }
     }
@@ -784,14 +890,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * Marks current line as active and past lines as past (Spotify-style)
      */
     function updateLyricsHighlight() {
-        if (!syncedLyrics || syncedLyrics.length === 0) return;
+        if (!syncedLyrics || syncedLyrics.length === 0 || !lyricsContent) return;
         
         // Find the current line based on playback time (currentTime is in seconds)
-        const currentTimeMs = currentTime * 1000;
+        const currentTimeMs = Math.max(0, currentTime * 1000);
         let newIndex = -1;
         
+        // Find the active lyric line - last line with time <= currentTime
         for (let i = 0; i < syncedLyrics.length; i++) {
-            if (syncedLyrics[i].time <= currentTimeMs) {
+            const lineTime = syncedLyrics[i].time;
+            if (lineTime !== undefined && lineTime <= currentTimeMs) {
                 newIndex = i;
             } else {
                 break;
@@ -802,14 +910,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (newIndex !== currentLyricIndex) {
             // Update all lines - mark past, active, and future
             const allLines = lyricsContent.querySelectorAll('.lyric-line');
-            allLines.forEach((line, index) => {
-                line.classList.remove('active', 'past');
-                if (index < newIndex) {
-                    line.classList.add('past');
-                } else if (index === newIndex) {
-                    line.classList.add('active');
-                }
-            });
+            if (allLines.length > 0) {
+                allLines.forEach((line, index) => {
+                    line.classList.remove('active', 'past');
+                    if (index < newIndex) {
+                        line.classList.add('past');
+                    } else if (index === newIndex) {
+                        line.classList.add('active');
+                    }
+                });
+            }
             
             currentLyricIndex = newIndex;
             
